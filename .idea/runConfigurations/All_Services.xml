@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="All Services" type="CompoundRunConfigurationType">
+    <toRun name="IncidentServiceApplication" type="Application" />
+    <toRun name="RescueTeamServiceApplication" type="Application" />
+    <toRun name="ResourceServiceApplication" type="Application" />
+    <toRun name="AlertServiceApplication" type="Application" />
+    <toRun name="MissionServiceApplication" type="Application" />
+    <toRun name="GatewayServiceApplication" type="Application" />
+    <method v="2" />
+  </configuration>
+</component>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile default="true" name="Default" enabled="true" />
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="rescue-team-service" />
+        <module name="incident-service (4)" />
+        <module name="incident-service (5)" />
+        <module name="alert-service" />
+        <module name="gateway-service" />
+        <module name="mission-service" />
+        <module name="resource-service" />
+        <module name="incident-service" />
+        <module name="incident-service (2)" />
+        <module name="incident-service (3)" />
+        <module name="incident-service (1)" />
+      </profile>
+    </annotationProcessing>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="alert-service" options="-parameters" />
+      <module name="gateway-service" options="-parameters" />
+      <module name="incident-service" options="-parameters" />
+      <module name="incident-service (1)" options="-parameters" />
+      <module name="incident-service (2)" options="-parameters" />
+      <module name="incident-service (3)" options="-parameters" />
+      <module name="incident-service (4)" options="-parameters" />
+      <module name="incident-service (5)" options="-parameters" />
+      <module name="mission-service" options="-parameters" />
+      <module name="rescue-team-service" options="-parameters" />
+      <module name="resource-service" options="-parameters" />
+    </option>
+  </component>
+</project>
