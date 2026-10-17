@@ -128,6 +128,9 @@ export default function App() {
         setSearchTerm={setSearchTerm}
         alerts={alerts}
         onNavigateToAlerts={() => setActiveTab('reports')}
+        onNavigateToSettings={() => setActiveTab('settings')}
+        onNavigateToReports={() => setActiveTab('reports')}
+        onSyncData={fetchAllData}
       />
 
       {/* Main Body */}

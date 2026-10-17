@@ -11,7 +11,14 @@ import {
   Radio, 
   X, 
   CheckCheck, 
-  Clock 
+  Clock, 
+  Settings, 
+  LogOut, 
+  BarChart2, 
+  RefreshCw, 
+  UserCheck, 
+  Activity, 
+  ShieldCheck 
 } from 'lucide-react';
 
 export default function TopHeader({
@@ -21,8 +28,14 @@ export default function TopHeader({
   setSearchTerm,
   alerts = [],
   onNavigateToAlerts,
+  onNavigateToSettings,
+  onNavigateToReports,
+  onSyncData,
 }) {
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [dutyStatus, setDutyStatus] = useState('ACTIVE'); // 'ACTIVE' | 'STANDBY' | 'FIELD'
+
   const [notifications, setNotifications] = useState([
     {
       id: 'notif-1',
@@ -50,7 +63,8 @@ export default function TopHeader({
     },
   ]);
 
-  const dropdownRef = useRef(null);
+  const notifRef = useRef(null);
+  const profileRef = useRef(null);
 
   // Sync with backend alerts if available
   useEffect(() => {
@@ -59,7 +73,9 @@ export default function TopHeader({
         id: `alert-${a.alertId || idx}`,
         title: `Emergency ${a.alertType || 'SMS'} Alert - Mission #${a.missionId || ''}`,
         message: a.message || 'Mission operation in progress.',
-        time: a.createdTime ? new Date(a.createdTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
+        time: a.createdTime
+          ? new Date(a.createdTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : 'Recent',
         severity: a.severity || 'HIGH',
         read: false,
       }));
@@ -67,11 +83,14 @@ export default function TopHeader({
     }
   }, [alerts]);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setShowDropdown(false);
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setShowNotificationDropdown(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setShowProfileDropdown(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -153,12 +172,15 @@ export default function TopHeader({
           </button>
         </div>
 
-        {/* Interactive Notifications Bell */}
-        <div className="relative" ref={dropdownRef}>
+        {/* Notifications Bell */}
+        <div className="relative" ref={notifRef}>
           <button
-            onClick={() => setShowDropdown(!showDropdown)}
+            onClick={() => {
+              setShowNotificationDropdown(!showNotificationDropdown);
+              setShowProfileDropdown(false);
+            }}
             className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all ${
-              showDropdown
+              showNotificationDropdown
                 ? 'bg-blue-600 text-white border-blue-500'
                 : 'bg-[#131d33] border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
             }`}
@@ -173,9 +195,8 @@ export default function TopHeader({
           </button>
 
           {/* Notifications Dropdown Panel */}
-          {showDropdown && (
+          {showNotificationDropdown && (
             <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#121b2f] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150">
-              {/* Header */}
               <div className="p-3.5 bg-[#0e1627] border-b border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Bell className="w-4 h-4 text-blue-400" />
@@ -206,7 +227,6 @@ export default function TopHeader({
                 </div>
               </div>
 
-              {/* Notification List */}
               <div className="max-h-80 overflow-y-auto divide-y divide-slate-800/60">
                 {notifications.length === 0 ? (
                   <div className="py-8 text-center text-xs text-slate-500">
@@ -222,7 +242,6 @@ export default function TopHeader({
                         item.read ? 'opacity-60 bg-transparent' : 'bg-[#141f36]/70'
                       }`}
                     >
-                      {/* Icon */}
                       <div className="mt-0.5 shrink-0">
                         {item.severity === 'CRITICAL' ? (
                           <div className="w-6 h-6 rounded-lg bg-red-950/90 border border-red-800/80 flex items-center justify-center text-red-400">
@@ -238,8 +257,6 @@ export default function TopHeader({
                           </div>
                         )}
                       </div>
-
-                      {/* Content */}
                       <div className="flex-1 space-y-0.5">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-bold text-white leading-tight">
@@ -262,12 +279,11 @@ export default function TopHeader({
                 )}
               </div>
 
-              {/* Footer */}
               {onNavigateToAlerts && (
                 <div className="p-2.5 bg-[#0e1627] border-t border-slate-800 text-center">
                   <button
                     onClick={() => {
-                      setShowDropdown(false);
+                      setShowNotificationDropdown(false);
                       onNavigateToAlerts();
                     }}
                     className="text-xs text-blue-400 hover:text-blue-300 font-semibold w-full"
@@ -280,16 +296,188 @@ export default function TopHeader({
           )}
         </div>
 
-        {/* User Pill */}
-        <div className="flex items-center gap-2.5 pl-2 border-l border-slate-800/80">
-          <div className="w-8 h-8 rounded-full bg-blue-600/80 border border-blue-400/40 flex items-center justify-center font-bold text-white text-xs shadow-sm">
-            U
-          </div>
-          <div className="hidden sm:block text-left">
-            <p className="text-xs font-semibold text-white leading-tight">Admin</p>
-            <p className="text-[10px] text-slate-400">Response Team</p>
-          </div>
-          <ChevronDown className="w-3.5 h-3.5 text-slate-500 hidden sm:block" />
+        {/* Interactive Admin Profile Dropdown */}
+        <div className="relative" ref={profileRef}>
+          <button
+            onClick={() => {
+              setShowProfileDropdown(!showProfileDropdown);
+              setShowNotificationDropdown(false);
+            }}
+            className="flex items-center gap-2.5 pl-2 border-l border-slate-800/80 text-left hover:opacity-90 transition-opacity focus:outline-none"
+          >
+            <div className="relative">
+              <div className="w-8 h-8 rounded-full bg-blue-600/90 border border-blue-400/40 flex items-center justify-center font-bold text-white text-xs shadow-md">
+                U
+              </div>
+              <span
+                className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-[#0d1527] ${
+                  dutyStatus === 'ACTIVE'
+                    ? 'bg-emerald-500'
+                    : dutyStatus === 'STANDBY'
+                    ? 'bg-amber-500'
+                    : 'bg-red-500'
+                }`}
+              />
+            </div>
+            <div className="hidden sm:block">
+              <p className="text-xs font-semibold text-white leading-tight">Admin</p>
+              <p className="text-[10px] text-slate-400">Response Team</p>
+            </div>
+            <ChevronDown
+              className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 hidden sm:block ${
+                showProfileDropdown ? 'rotate-180 text-white' : ''
+              }`}
+            />
+          </button>
+
+          {/* Admin Profile Dropdown Menu */}
+          {showProfileDropdown && (
+            <div className="absolute right-0 mt-2 w-72 bg-[#121b2f] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150">
+              {/* Profile Identity Card */}
+              <div className="p-4 bg-[#0e1627] border-b border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full bg-blue-600 border-2 border-blue-400/60 flex items-center justify-center font-extrabold text-white text-sm shadow-md">
+                    U
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-white">Ujjwal Manocha</h4>
+                      <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                    </div>
+                    <p className="text-[10px] text-slate-400">ujjwalmanocha1756@gmail.com</p>
+                    <span className="inline-block px-2 py-0.5 rounded text-[9px] font-bold bg-blue-950 text-blue-300 border border-blue-800/60 mt-1">
+                      Lead Incident Commander
+                    </span>
+                  </div>
+                </div>
+
+                {/* Duty Status Selector */}
+                <div className="mt-3 pt-3 border-t border-slate-800/80">
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1.5 font-medium">
+                    <span>Operational Duty Status:</span>
+                    <span className="font-bold text-white">
+                      {dutyStatus === 'ACTIVE'
+                        ? '🟢 Active On-Duty'
+                        : dutyStatus === 'STANDBY'
+                        ? '🟡 Standby / Ready'
+                        : '🔴 In Field Ops'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 text-[9px] font-bold">
+                    <button
+                      onClick={() => setDutyStatus('ACTIVE')}
+                      className={`py-1 rounded-lg border text-center transition-all ${
+                        dutyStatus === 'ACTIVE'
+                          ? 'bg-emerald-950 text-emerald-300 border-emerald-600'
+                          : 'bg-[#131d33] text-slate-400 border-slate-800 hover:text-white'
+                      }`}
+                    >
+                      Active
+                    </button>
+                    <button
+                      onClick={() => setDutyStatus('STANDBY')}
+                      className={`py-1 rounded-lg border text-center transition-all ${
+                        dutyStatus === 'STANDBY'
+                          ? 'bg-amber-950 text-amber-300 border-amber-600'
+                          : 'bg-[#131d33] text-slate-400 border-slate-800 hover:text-white'
+                      }`}
+                    >
+                      Standby
+                    </button>
+                    <button
+                      onClick={() => setDutyStatus('FIELD')}
+                      className={`py-1 rounded-lg border text-center transition-all ${
+                        dutyStatus === 'FIELD'
+                          ? 'bg-red-950 text-red-300 border-red-600'
+                          : 'bg-[#131d33] text-slate-400 border-slate-800 hover:text-white'
+                      }`}
+                    >
+                      Field Ops
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Menu Links */}
+              <div className="p-2 space-y-1 text-xs">
+                {/* Switch to Citizen Portal */}
+                <button
+                  onClick={() => {
+                    setShowProfileDropdown(false);
+                    onToggleRole('citizen');
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-[#152037] transition-colors text-left"
+                >
+                  <Users className="w-4 h-4 text-amber-400" />
+                  <div>
+                    <p className="font-semibold text-white">Switch to Citizen Portal</p>
+                    <p className="text-[10px] text-slate-400">Public emergency request view</p>
+                  </div>
+                </button>
+
+                {/* System Settings */}
+                <button
+                  onClick={() => {
+                    setShowProfileDropdown(false);
+                    if (onNavigateToSettings) onNavigateToSettings();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-[#152037] transition-colors text-left"
+                >
+                  <Settings className="w-4 h-4 text-slate-400" />
+                  <div>
+                    <p className="font-semibold text-white">System & Microservices</p>
+                    <p className="text-[10px] text-slate-400">Gateway 8086 & PostgreSQL state</p>
+                  </div>
+                </button>
+
+                {/* Command Reports */}
+                <button
+                  onClick={() => {
+                    setShowProfileDropdown(false);
+                    if (onNavigateToReports) onNavigateToReports();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-[#152037] transition-colors text-left"
+                >
+                  <BarChart2 className="w-4 h-4 text-blue-400" />
+                  <div>
+                    <p className="font-semibold text-white">Missions & Analytics Hub</p>
+                    <p className="text-[10px] text-slate-400">Live rescue coordination statistics</p>
+                  </div>
+                </button>
+
+                {/* Re-sync data */}
+                {onSyncData && (
+                  <button
+                    onClick={() => {
+                      onSyncData();
+                      setShowProfileDropdown(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-[#152037] transition-colors text-left"
+                  >
+                    <RefreshCw className="w-4 h-4 text-emerald-400" />
+                    <div>
+                      <p className="font-semibold text-white">Sync Backend Services</p>
+                      <p className="text-[10px] text-slate-400">Refresh live microservice data</p>
+                    </div>
+                  </button>
+                )}
+              </div>
+
+              {/* Sign Out / Operator Reset */}
+              <div className="p-2 border-t border-slate-800 bg-[#0e1627]/60">
+                <button
+                  onClick={() => {
+                    setShowProfileDropdown(false);
+                    alert('Session active for Administrator Ujjwal Manocha.');
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-950/40 text-xs font-semibold transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sign Out / Change Operator
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>
