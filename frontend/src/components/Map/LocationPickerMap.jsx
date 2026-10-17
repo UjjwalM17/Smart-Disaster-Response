@@ -54,8 +54,14 @@ export default function LocationPickerMap({
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      const basemapKey = import.meta.env.VITE_BASEMAP_KEY || 'cb1_4nhl_1_64952bce502d32dff4977e54';
+      const tileUrl = basemapKey
+        ? `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${basemapKey}`
+        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
+      L.tileLayer(tileUrl, {
         maxZoom: 19,
+        subdomains: 'abcd',
       }).addTo(map);
 
       const marker = L.marker([currentLat, currentLng], {
