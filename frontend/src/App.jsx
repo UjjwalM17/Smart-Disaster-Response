@@ -278,6 +278,80 @@ export default function App() {
                   Manage connection parameters and operational defaults for Spring Boot services.
                 </p>
                 <div className="space-y-3 text-xs pt-2">
+                  {/* Hugging Face AI Configuration */}
+                  <div className="p-4 bg-[#0e1627] rounded-xl border border-blue-900/40 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-bold text-amber-400">
+                          🤗
+                        </div>
+                        <div>
+                          <p className="font-bold text-white text-xs">Hugging Face AI Vision Service</p>
+                          <p className="text-[10px] text-slate-400">Official Inference Router: dima806/disaster_image_classification</p>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-950 text-blue-300 border border-blue-800/60">
+                        INFERENCE API
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 pt-1">
+                      <label className="text-[10px] text-slate-400 font-medium">User Access Token (hf_...)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          placeholder="Enter your Hugging Face Token (starts with hf_)"
+                          defaultValue={localStorage.getItem('resq_hf_token') || ''}
+                          id="hf-token-input"
+                          className="flex-1 bg-[#131d33] text-white text-[11px] px-3 py-2 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 font-mono"
+                        />
+                        <button
+                          onClick={async () => {
+                            const input = document.getElementById('hf-token-input');
+                            if (input) {
+                              const val = input.value.trim();
+                              if (val) {
+                                localStorage.setItem('resq_hf_token', val);
+                                showToast('Testing Hugging Face token...');
+                                try {
+                                  const res = await fetch('https://huggingface.co/api/whoami-v2', {
+                                    headers: { Authorization: `Bearer ${val}` },
+                                  });
+                                  if (res.ok) {
+                                    const user = await res.json();
+                                    showToast(`Connected as @${user.name || 'user'}! Token saved.`);
+                                  } else {
+                                    showToast('Token rejected by Hugging Face.', 'error');
+                                  }
+                                } catch (e) {
+                                  showToast('Connection error to huggingface.co', 'error');
+                                }
+                              } else {
+                                localStorage.removeItem('resq_hf_token');
+                                showToast('Hugging Face token cleared.');
+                              }
+                            }
+                          }}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+                        >
+                          Save & Verify
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-500 pt-0.5">
+                        Get your free user token at{' '}
+                        <a
+                          href="https://huggingface.co/settings/tokens"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-400 hover:underline"
+                        >
+                          huggingface.co/settings/tokens
+                        </a>. If left blank, the app uses the built-in local AI disaster heuristics.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Microservices */}
                   <div className="flex items-center justify-between p-3 bg-[#0e1627] rounded-xl border border-slate-800">
                     <div>
                       <p className="font-semibold text-white">Spring Cloud Gateway</p>

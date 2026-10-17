@@ -13,9 +13,13 @@ import {
   Flame, 
   CheckCircle2, 
   Sparkles, 
-  Layers 
+  Layers, 
+  Key, 
+  Cpu, 
+  ExternalLink, 
+  Check 
 } from 'lucide-react';
-import { aiAssessmentService } from '../../services/aiAssessmentService';
+import { huggingfaceService, SUPPORTED_MODELS, DEFAULT_MODEL } from '../../services/huggingfaceService';
 
 // Default demo flood image (high quality real disaster response photo)
 const DEFAULT_FLOOD_IMAGE = 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80';
@@ -23,12 +27,20 @@ const DEFAULT_FLOOD_IMAGE = 'https://images.unsplash.com/photo-1547683905-f686c9
 export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }) {
   // Form State
   const [imagePreview, setImagePreview] = useState(DEFAULT_FLOOD_IMAGE);
+  const [rawImageFile, setRawImageFile] = useState(null);
   const [description, setDescription] = useState(
     'Houses submerged due to heavy rain. Many people are stranded.'
   );
   const [affectedPeople, setAffectedPeople] = useState('50');
   const [notes, setNotes] = useState('Roads are blocked.');
   const [analyzing, setAnalyzing] = useState(false);
+
+  // Hugging Face API Configuration Bar State
+  const [showConfig, setShowConfig] = useState(false);
+  const [hfToken, setHfToken] = useState(huggingfaceService.getApiKey());
+  const [selectedModel, setSelectedModel] = useState(huggingfaceService.getModel());
+  const [tokenSaved, setTokenSaved] = useState(false);
+  const [tokenStatusMessage, setTokenStatusMessage] = useState('');
 
   // AI Assessment State (Default initial values match screenshot)
   const [assessment, setAssessment] = useState({
@@ -39,6 +51,12 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
     priorityScore: 87,
     priorityLevel: 'CRITICAL',
     alertMessage: 'Immediate response required. High population impact and severe damage detected.',
+    modelUsed: DEFAULT_MODEL,
+    isLiveCloud: Boolean(huggingfaceService.getApiKey()),
+    topPredictions: [
+      { label: 'Flood', score: 0.92 },
+      { label: 'Landslide', score: 0.05 },
+    ],
     breakdown: {
       severity: 30,
       populationImpact: 25,
@@ -58,6 +76,7 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      setRawImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result);
@@ -66,18 +85,36 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
     }
   };
 
-  const handleRunAnalysis = (e) => {
+  const handleSaveToken = async () => {
+    huggingfaceService.setApiKey(hfToken);
+    huggingfaceService.setModel(selectedModel);
+    setTokenSaved(true);
+    setTokenStatusMessage('Validating token...');
+
+    const res = await huggingfaceService.testConnection(hfToken);
+    if (res.success) {
+      setTokenStatusMessage(`✅ ${res.message}`);
+    } else {
+      setTokenStatusMessage(`⚠️ ${res.message}`);
+    }
+
+    setTimeout(() => setTokenSaved(false), 4000);
+  };
+
+  const handleRunAnalysis = async (e) => {
     e.preventDefault();
     setAnalyzing(true);
-    setTimeout(() => {
-      const result = aiAssessmentService.analyzeIncident(
-        imagePreview,
+
+    try {
+      const payload = rawImageFile || imagePreview;
+      const result = await huggingfaceService.classifyImage(
+        payload,
         description,
         affectedPeople,
         notes
       );
       setAssessment(result);
-      setAnalyzing(false);
+
       if (onIncidentReported) {
         onIncidentReported({
           description,
@@ -87,8 +124,14 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
           image: imagePreview,
         });
       }
-    }, 600);
+    } catch (err) {
+      console.error('Analysis error:', err);
+    } finally {
+      setAnalyzing(false);
+    }
   };
+
+  const hasHfToken = Boolean(huggingfaceService.getApiKey());
 
   return (
     <div className="space-y-4">
@@ -97,17 +140,90 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
         {/* ================= STEP 1 ================= */}
         <div className="bg-[#121b2f] border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-700/80 transition-all">
           <div className="space-y-3">
-            <div className="flex items-center gap-2.5">
-              <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center">
-                1
-              </span>
-              <div>
-                <h3 className="text-sm font-bold text-white">1. Submit Image & Report</h3>
-                <p className="text-[11px] text-slate-400">
-                  Upload an image and provide details about the incident.
-                </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center">
+                  1
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-white">1. Submit Image & Report</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Upload an image and provide details about the incident.
+                  </p>
+                </div>
               </div>
+
+              {/* Hugging Face AI Model Pill Toggle */}
+              <button
+                onClick={() => setShowConfig(!showConfig)}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${
+                  hasHfToken
+                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/80'
+                    : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:text-white'
+                }`}
+                title="Configure Hugging Face Model & API Token"
+              >
+                <Cpu className="w-3 h-3 text-amber-400" />
+                <span>{hasHfToken ? 'HF Cloud Active' : 'HF Model Config'}</span>
+              </button>
             </div>
+
+            {/* Hugging Face Inline Configuration Box */}
+            {showConfig && (
+              <div className="p-3 bg-[#0d1629] border border-blue-900/60 rounded-xl space-y-2 text-xs animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-blue-400" />
+                    Hugging Face Inference API
+                  </span>
+                  <a
+                    href="https://huggingface.co/settings/tokens"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5 font-medium"
+                  >
+                    Get Free Token <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+
+                <div className="space-y-1">
+                  <input
+                    type="password"
+                    placeholder="Enter Hugging Face User Access Token (hf_...)"
+                    value={hfToken}
+                    onChange={(e) => setHfToken(e.target.value)}
+                    className="w-full bg-[#131d33] text-white text-[11px] px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400">Target Disaster Model:</label>
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="w-full bg-[#131d33] text-white text-[11px] px-2 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500"
+                  >
+                    {SUPPORTED_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[10px] text-slate-400">
+                    {tokenStatusMessage || (hasHfToken ? 'Token saved in browser.' : 'Leave blank for local demo mode.')}
+                  </span>
+                  <button
+                    onClick={handleSaveToken}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-sm"
+                  >
+                    <Check className="w-3 h-3" /> Save & Test
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Image Upload Area & Preview Box */}
             <div className="grid grid-cols-2 gap-2.5">
@@ -136,7 +252,10 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
                 />
                 <button
                   type="button"
-                  onClick={() => setImagePreview(DEFAULT_FLOOD_IMAGE)}
+                  onClick={() => {
+                    setImagePreview(DEFAULT_FLOOD_IMAGE);
+                    setRawImageFile(null);
+                  }}
                   className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-slate-900/80 hover:bg-red-600 text-slate-300 hover:text-white flex items-center justify-center transition-all"
                   title="Reset image"
                 >
@@ -194,7 +313,7 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
               {analyzing ? (
                 <>
                   <Sparkles className="w-3.5 h-3.5 animate-spin text-amber-300" />
-                  Running AI Inference...
+                  Running AI Inference via Hugging Face...
                 </>
               ) : (
                 <>
@@ -209,15 +328,17 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
         {/* ================= STEP 2 ================= */}
         <div className="bg-[#121b2f] border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-700/80 transition-all">
           <div className="space-y-3">
-            <div className="flex items-center gap-2.5">
-              <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center">
-                2
-              </span>
-              <div>
-                <h3 className="text-sm font-bold text-white">2. AI Damage Assessment</h3>
-                <p className="text-[11px] text-slate-400">
-                  AI model analyzes the image and identifies disaster details.
-                </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center">
+                  2
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-white">2. AI Damage Assessment</h3>
+                  <p className="text-[11px] text-slate-400">
+                    AI model analyzes the image and identifies disaster details.
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -232,10 +353,21 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
               </div>
 
               {/* Assessment Results */}
-              <div className="flex-1 space-y-2.5 text-xs">
-                <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                  Assessment Results
-                </p>
+              <div className="flex-1 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                    Assessment Results
+                  </p>
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                      assessment.isLiveCloud
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60'
+                        : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    }`}
+                  >
+                    {assessment.isLiveCloud ? 'Hugging Face Live' : 'Local AI Model'}
+                  </span>
+                </div>
 
                 {/* Category */}
                 <div className="flex items-center justify-between">
@@ -313,7 +445,6 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
               {/* Circular Priority Gauge */}
               <div className="relative w-24 h-24 shrink-0 flex items-center justify-center">
                 <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
-                  {/* Track circle */}
                   <circle
                     cx="50"
                     cy="50"
@@ -322,7 +453,6 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
                     strokeWidth="8"
                     fill="transparent"
                   />
-                  {/* Progress circle */}
                   <circle
                     cx="50"
                     cy="50"
