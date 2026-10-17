@@ -68,13 +68,18 @@ export default function IncidentDetailDrawer({ incident, isOpen, onClose, onMiss
 
     setDispatching(true);
     try {
+      let missionPrio = 'HIGH';
+      if (score >= 75) missionPrio = 'CRITICAL';
+      else if (score >= 50) missionPrio = 'HIGH';
+      else if (score >= 25) missionPrio = 'MEDIUM';
+      else missionPrio = 'LOW';
+
       const payload = {
         incidentId: Number(incident.incidentId || incident.id),
-        teamId: Number(selectedTeamId),
-        resourceId: selectedResourceId ? Number(selectedResourceId) : null,
-        missionName: `QRF Strike: ${incident.aiLabel || incident.disasterType} at ${incident.location || 'Site'}`,
-        status: 'ASSIGNED',
-        dispatchedAt: new Date().toISOString(),
+        rescueTeamIds: [Number(selectedTeamId || 1)],
+        resourceIds: [Number(selectedResourceId || (resources[0]?.resourceId || 1))],
+        priority: missionPrio,
+        remarks: `QRF Strike: ${incident.aiLabel || incident.disasterType} at ${incident.location || 'Site'}`,
       };
 
       await api.createMission(payload);

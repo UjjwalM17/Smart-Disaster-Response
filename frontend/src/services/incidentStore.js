@@ -255,12 +255,11 @@ export const incidentStore = {
   async createIncident(formData) {
     let backendId = null;
 
-    // Map severity to Spring Boot enum: LOW, MEDIUM, HIGH, CRITICAL
+    // Map severity to Spring Boot enum: LOW, MEDIUM, HIGH (backend does not have CRITICAL in Severity enum)
     let severityEnum = 'HIGH';
     const prio = formData.priorityScore || 80;
-    if (prio >= 75) severityEnum = 'CRITICAL';
-    else if (prio >= 50) severityEnum = 'HIGH';
-    else if (prio >= 25) severityEnum = 'MEDIUM';
+    if (prio >= 60) severityEnum = 'HIGH';
+    else if (prio >= 30) severityEnum = 'MEDIUM';
     else severityEnum = 'LOW';
 
     // 1. Submit to Backend /api/incidents
