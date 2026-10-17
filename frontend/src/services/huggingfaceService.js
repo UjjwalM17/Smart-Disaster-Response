@@ -67,10 +67,11 @@ export const huggingfaceService = {
 
       if (response.ok) {
         const data = await response.json();
+        const displayName = data.fullname ? `${data.name} (${data.fullname})` : (data.name || 'User');
         return {
           success: true,
           username: data.name || data.fullname || 'Authenticated User',
-          message: `Connected successfully as @${data.name || 'user'}!`,
+          message: `Connected successfully as @${displayName}!`,
         };
       } else {
         const errorText = await response.text();
