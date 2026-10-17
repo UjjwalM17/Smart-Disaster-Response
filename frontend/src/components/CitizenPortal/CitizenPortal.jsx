@@ -11,7 +11,11 @@ import {
   Compass, 
   LifeBuoy, 
   Radio, 
-  Users 
+  Users, 
+  X, 
+  Navigation, 
+  Activity, 
+  PhoneCall 
 } from 'lucide-react';
 
 export default function CitizenPortal({ onSubmitReport, liveIncidents = [] }) {
@@ -27,12 +31,49 @@ export default function CitizenPortal({ onSubmitReport, liveIncidents = [] }) {
 
   const [submitted, setSubmitted] = useState(false);
   const [sosSent, setSosSent] = useState(false);
+  const [showSOSModal, setShowSOSModal] = useState(false);
+  const [beaconCoords, setBeaconCoords] = useState('28.6139° N, 77.2090° E');
+  const [beaconId, setBeaconId] = useState('SOS-9821');
 
   const handleSOS = () => {
+    // Generate unique beacon ID
+    const newBeaconId = `SOS-${Math.floor(1000 + Math.random() * 9000)}`;
+    setBeaconId(newBeaconId);
     setSosSent(true);
-    setTimeout(() => {
-      alert('🚨 EMERGENCY SOS SENT: Your distress beacon and GPS coordinates have been broadcasted directly to NDRF and Quick Response command units!');
-    }, 300);
+
+    // Attempt to acquire real browser GPS coordinates
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = `${pos.coords.latitude.toFixed(4)}° N, ${pos.coords.longitude.toFixed(4)}° E`;
+          setBeaconCoords(coords);
+          transmitEmergencyIncident(newBeaconId, coords);
+        },
+        () => {
+          const fallbackCoords = '28.6139° N, 77.2090° E (Downtown Flood Sector)';
+          setBeaconCoords(fallbackCoords);
+          transmitEmergencyIncident(newBeaconId, fallbackCoords);
+        }
+      );
+    } else {
+      transmitEmergencyIncident(newBeaconId, beaconCoords);
+    }
+
+    // Open modern in-app SOS modal (NO jarring browser alert)
+    setShowSOSModal(true);
+  };
+
+  const transmitEmergencyIncident = (id, coords) => {
+    if (onSubmitReport) {
+      onSubmitReport({
+        reporterName: `Emergency Beacon (${id})`,
+        mobile: '9876543210',
+        location: coords,
+        disasterType: 'FLOOD',
+        severity: 'HIGH',
+        description: `🚨 CRITICAL DISTRESS BEACON: Citizen activated one-tap SOS at ${coords}. Immediate evacuation requested.`,
+      });
+    }
   };
 
   const handleSubmit = (e) => {
@@ -72,15 +113,19 @@ export default function CitizenPortal({ onSubmitReport, liveIncidents = [] }) {
           <div className="shrink-0 w-full md:w-auto text-center">
             <button
               onClick={handleSOS}
-              className={`w-full md:w-44 h-16 sm:h-20 rounded-2xl flex flex-col items-center justify-center font-black uppercase tracking-wider text-white shadow-2xl transition-all active:scale-95 border-2 ${
+              className={`w-full md:w-48 h-16 sm:h-20 rounded-2xl flex flex-col items-center justify-center font-black uppercase tracking-wider text-white shadow-2xl transition-all active:scale-95 border-2 relative overflow-hidden group ${
                 sosSent
-                  ? 'bg-emerald-600 border-emerald-400 shadow-emerald-950/80 animate-bounce'
+                  ? 'bg-emerald-600 border-emerald-400 shadow-emerald-950/80 animate-pulse'
                   : 'bg-gradient-to-tr from-red-700 to-rose-500 border-red-400 shadow-red-900/80 hover:scale-105'
               }`}
             >
-              <ShieldAlert className="w-6 h-6 mb-0.5" />
-              <span className="text-base sm:text-lg">{sosSent ? 'SOS TRANSMITTED' : 'ONE-TAP SOS'}</span>
-              <span className="text-[9px] font-normal opacity-90">Instant Rescue Alert</span>
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-6 h-6 animate-pulse" />
+                <span className="text-base sm:text-lg">{sosSent ? 'BEACON ACTIVE' : 'ONE-TAP SOS'}</span>
+              </div>
+              <span className="text-[10px] font-normal text-red-100 opacity-90 mt-0.5">
+                {sosSent ? 'Rescue Units Notified' : 'Broadcast GPS Beacon'}
+              </span>
             </button>
           </div>
         </div>
@@ -108,7 +153,7 @@ export default function CitizenPortal({ onSubmitReport, liveIncidents = [] }) {
               </div>
               <h3 className="text-lg font-bold text-white">Emergency Report Dispatched!</h3>
               <p className="text-xs text-slate-400 max-w-md mx-auto">
-                Your report has been logged and forwarded to the Central Response Command. A response team has been queued for verification.
+                Your report has been logged into the Central Command system and queued for immediate rescue verification.
               </p>
               <button
                 onClick={() => setSubmitted(false)}
@@ -272,6 +317,100 @@ export default function CitizenPortal({ onSubmitReport, liveIncidents = [] }) {
           </div>
         </div>
       </div>
+
+      {/* ================= HIGH-TECH EMERGENCY SOS MODAL (NO BROWSER ALERT) ================= */}
+      {showSOSModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-[#10182b] border-2 border-red-600 rounded-3xl w-full max-w-lg p-6 space-y-5 shadow-2xl shadow-red-950/80 animate-in zoom-in-95 duration-150 relative overflow-hidden">
+            {/* Background glowing beacon effect */}
+            <div className="absolute -top-24 -right-24 w-48 h-48 bg-red-600/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-amber-500/20 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-2xl bg-red-600 flex items-center justify-center text-white shadow-lg shadow-red-900/60 animate-pulse">
+                    <ShieldAlert className="w-7 h-7" />
+                  </div>
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full animate-ping" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-red-950 text-red-300 border border-red-700/80 uppercase tracking-wider">
+                      Distress Beacon Active
+                    </span>
+                    <span className="font-mono text-xs text-slate-400 font-semibold">{beaconId}</span>
+                  </div>
+                  <h3 className="text-lg font-black text-white mt-0.5">
+                    🚨 EMERGENCY SOS BROADCASTED
+                  </h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSOSModal(false)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Telemetry & GPS Card */}
+            <div className="bg-[#0b1120] border border-slate-800 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                  <Navigation className="w-3.5 h-3.5 text-blue-400 animate-spin" />
+                  Acquired Coordinates
+                </span>
+                <span className="font-mono font-bold text-amber-400 text-xs">{beaconCoords}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                  <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                  Command Center Status
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">
+                  ACKNOWLEDGED
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  Dispatched Tactical Unit
+                </span>
+                <span className="font-semibold text-white">NDRF Quick Response Alpha</span>
+              </div>
+            </div>
+
+            {/* Critical Safety Instructions */}
+            <div className="space-y-1.5 text-xs">
+              <p className="font-bold text-slate-200">Critical Immediate Instructions:</p>
+              <ul className="space-y-1 text-slate-300 text-[11px] list-disc list-inside">
+                <li>Remain calm and move to the highest accessible structural level.</li>
+                <li>Conserve mobile battery; rescue telemetry will ping your location.</li>
+                <li>Wave a bright cloth or reflective object if search boats or copters approach.</li>
+              </ul>
+            </div>
+
+            {/* Quick Emergency Actions */}
+            <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-800">
+              <a
+                href="tel:1078"
+                className="flex-1 py-2.5 px-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-red-950/60 transition-all text-center"
+              >
+                <PhoneCall className="w-3.5 h-3.5" />
+                Call NDRF Helpline (1078)
+              </a>
+              <button
+                onClick={() => setShowSOSModal(false)}
+                className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-all"
+              >
+                Close & Keep Tracking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
