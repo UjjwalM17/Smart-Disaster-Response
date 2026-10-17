@@ -8,6 +8,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom', 'leaflet'],
+  },
   server: {
     port: 3000,
     proxy: {
