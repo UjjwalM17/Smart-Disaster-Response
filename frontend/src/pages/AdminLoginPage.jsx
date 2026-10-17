@@ -37,34 +37,53 @@ export default function AdminLoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Configured credentials from .env with secure defaults
-  const expectedUser = import.meta.env.VITE_ADMIN_USER || 'admin';
-  const expectedPass = import.meta.env.VITE_ADMIN_PASS || 'resq2026';
+  // Configured credentials with flexible demo fallbacks
+  const envUser = (import.meta.env.VITE_ADMIN_USER || 'admin').trim().toLowerCase();
+  const envPass = (import.meta.env.VITE_ADMIN_PASS || 'resq2026').trim();
 
   const handleLogin = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setError('');
     setLoading(true);
 
+    const inputUser = username.trim().toLowerCase();
+    const inputPass = password.trim();
+
+    // Accept configured env password, 'resq2026', 'admin', or 'admin123'
+    const validUsers = ['admin', envUser];
+    const validPasswords = ['resq2026', 'admin', 'admin123', envPass];
+
     setTimeout(() => {
-      if (username.trim() === expectedUser && password.trim() === expectedPass) {
+      if (validUsers.includes(inputUser) && validPasswords.includes(inputPass)) {
         setAdminSession({
-          username: expectedUser,
+          username: 'admin',
           role: 'Lead Incident Commander',
           token: 'demo-jwt-token-hackathon-2026',
           authenticatedAt: new Date().toISOString(),
         });
         navigate('/admin');
       } else {
-        setError('Invalid commander credentials. Check your username and password.');
+        setError('Invalid commander credentials. Use admin / resq2026 (or click 1-Click Demo Login below).');
         setLoading(false);
       }
-    }, 400);
+    }, 200);
+  };
+
+  const handleDirectDemoLogin = () => {
+    setUsername('admin');
+    setPassword('resq2026');
+    setAdminSession({
+      username: 'admin',
+      role: 'Lead Incident Commander',
+      token: 'demo-jwt-token-hackathon-2026',
+      authenticatedAt: new Date().toISOString(),
+    });
+    navigate('/admin');
   };
 
   const handleQuickDemoFill = () => {
-    setUsername(expectedUser);
-    setPassword(expectedPass);
+    setUsername('admin');
+    setPassword('resq2026');
   };
 
   return (
@@ -84,14 +103,24 @@ export default function AdminLoginPage() {
         </div>
 
         {/* Demo Hint Banner */}
-        <div className="p-3 bg-blue-950/50 border border-blue-800/50 rounded-2xl text-[11px] text-blue-300 flex items-center justify-between">
-          <span>Demo Credentials: <strong>admin</strong> / <strong>{expectedPass}</strong></span>
+        <div className="p-3.5 bg-blue-950/60 border border-blue-800/60 rounded-2xl text-[11px] text-blue-300 space-y-2">
+          <div className="flex items-center justify-between">
+            <span>Demo: <strong>admin</strong> / <strong>{envPass || 'resq2026'}</strong></span>
+            <button
+              type="button"
+              onClick={handleQuickDemoFill}
+              className="px-2 py-0.5 rounded-lg bg-blue-600/80 hover:bg-blue-500 text-white font-bold text-[10px] transition-colors"
+            >
+              Fill Fields
+            </button>
+          </div>
           <button
             type="button"
-            onClick={handleQuickDemoFill}
-            className="px-2 py-0.5 rounded-lg bg-blue-600/60 hover:bg-blue-500 text-white font-bold text-[10px] transition-colors"
+            onClick={handleDirectDemoLogin}
+            className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            Auto-fill
+            <span>1-Click Sign In as Commander</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
