@@ -223,13 +223,19 @@ export default function AdminVerificationPage() {
                 className="bg-[#121b2f] border border-slate-800 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between hover:border-slate-700 transition-all"
               >
                 <div>
-                  {/* Photo Preview */}
-                  <div className="relative h-44 bg-slate-900 group">
+                  {/* Photo Preview (Clickable to open drawer) */}
+                  <div
+                    onClick={() => {
+                      setSelectedIncident(inc);
+                      setIsDrawerOpen(true);
+                    }}
+                    className="relative h-44 bg-slate-900 group cursor-pointer overflow-hidden"
+                  >
                     <IncidentImage
                       src={inc.imageUrl}
                       disasterType={inc.aiLabel || inc.disasterType}
                       alt={inc.aiLabel || inc.disasterType || 'Incident proof'}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                     <div className="absolute top-3 left-3 flex items-center gap-1.5">
                       <span
@@ -306,11 +312,12 @@ export default function AdminVerificationPage() {
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => {
                       setSelectedIncident(inc);
                       setIsDrawerOpen(true);
                     }}
-                    className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold border border-slate-700 transition-colors flex items-center gap-1.5"
+                    className="px-3.5 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 hover:text-white text-xs font-bold border border-blue-500/40 transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
                   >
                     <Eye className="w-3.5 h-3.5 text-blue-400" /> Inspect Telemetry
                   </button>

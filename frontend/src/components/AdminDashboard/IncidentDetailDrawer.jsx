@@ -28,6 +28,18 @@ export default function IncidentDetailDrawer({ incident, isOpen, onClose, onMiss
   const [dispatching, setDispatching] = useState(false);
   const [dispatchSuccess, setDispatchSuccess] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
+  const [showOverride, setShowOverride] = useState(false);
+  const [overrideScore, setOverrideScore] = useState(incident?.priorityScore || 75);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideSaved, setOverrideSaved] = useState(false);
+
+  useEffect(() => {
+    if (incident) {
+      setOverrideScore(incident.priorityScore || 75);
+      setOverrideReason('');
+      setShowOverride(false);
+    }
+  }, [incident]);
 
   useEffect(() => {
     if (isOpen && incident) {
