@@ -40,6 +40,7 @@ export default function CitizenReportPage() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [photoError, setPhotoError] = useState('');
+  const [exifGpsDetected, setExifGpsDetected] = useState(false);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
@@ -67,9 +68,115 @@ export default function CitizenReportPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle Photo selection (drag/drop or file/camera)
-  const handlePhotoSelect = (file) => {
+  // ─── Pure-JS EXIF GPS extractor (no library needed) ───────────────────────
+  const extractExifGps = (file) =>
+    new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        try {
+          const buf = reader.result;
+          const view = new DataView(buf);
+          // Must start with JPEG SOI marker 0xFFD8
+          if (view.getUint16(0) !== 0xffd8) return resolve(null);
+
+          let offset = 2;
+          while (offset < view.byteLength - 4) {
+            const marker = view.getUint16(offset);
+            const segLen = view.getUint16(offset + 2);
+            // APP1 marker 0xFFE1 contains EXIF
+            if (marker === 0xffe1) {
+              // Check "Exif\0\0" header
+              const exifHeader = String.fromCharCode(
+                view.getUint8(offset + 4), view.getUint8(offset + 5),
+                view.getUint8(offset + 6), view.getUint8(offset + 7)
+              );
+              if (exifHeader !== 'Exif') break;
+
+              const tiffStart = offset + 10;
+              const endian = view.getUint16(tiffStart); // 0x4949 = LE, 0x4D4D = BE
+              const le = endian === 0x4949;
+              const getU16 = (o) => view.getUint16(tiffStart + o, le);
+              const getU32 = (o) => view.getUint32(tiffStart + o, le);
+
+              // Read IFD0 entries to find GPS IFD offset (tag 0x8825)
+              const ifd0Offset = getU32(4);
+              const ifd0Count = getU16(ifd0Offset);
+              let gpsIfdOffset = null;
+
+              for (let i = 0; i < ifd0Count; i++) {
+                const entryOffset = ifd0Offset + 2 + i * 12;
+                const tag = getU16(entryOffset);
+                if (tag === 0x8825) {
+                  gpsIfdOffset = getU32(entryOffset + 8);
+                  break;
+                }
+              }
+              if (gpsIfdOffset === null) return resolve(null);
+
+              // Read GPS IFD entries
+              const gpsCount = getU16(gpsIfdOffset);
+              const gpsData = {};
+              for (let i = 0; i < gpsCount; i++) {
+                const entryOffset = gpsIfdOffset + 2 + i * 12;
+                const tag = getU16(entryOffset);
+                const type = getU16(entryOffset + 2);
+                const count = getU32(entryOffset + 4);
+                const valOffset = entryOffset + 8;
+
+                if (type === 2) {
+                  // ASCII string (LatRef / LonRef)
+                  gpsData[tag] = String.fromCharCode(view.getUint8(tiffStart + getU32(valOffset)));
+                } else if (type === 5) {
+                  // Rational — value offset points into TIFF block
+                  const rOffset = getU32(valOffset);
+                  const vals = [];
+                  for (let r = 0; r < count; r++) {
+                    const num = getU32(rOffset + r * 8);
+                    const den = getU32(rOffset + r * 8 + 4);
+                    vals.push(den !== 0 ? num / den : 0);
+                  }
+                  gpsData[tag] = vals;
+                }
+              }
+
+              // Tag 1=LatRef, 2=Lat(DMS), 3=LonRef, 4=Lon(DMS)
+              if (!gpsData[2] || !gpsData[4]) return resolve(null);
+              const dmsToDecimal = ([deg, min, sec]) => deg + min / 60 + sec / 3600;
+              let lat = dmsToDecimal(gpsData[2]);
+              let lng = dmsToDecimal(gpsData[4]);
+              if (gpsData[1] === 'S') lat = -lat;
+              if (gpsData[3] === 'W') lng = -lng;
+              return resolve({ lat, lng });
+            }
+            offset += 2 + segLen;
+          }
+          resolve(null);
+        } catch {
+          resolve(null);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+  // Reverse-geocode lat/lng → human-readable address (OpenStreetMap Nominatim)
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.display_name || null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Handle Photo selection (drag/drop or file/camera) — with EXIF GPS auto-detect
+  const handlePhotoSelect = async (file) => {
     setPhotoError('');
+    setExifGpsDetected(false);
     if (!file) return;
 
     if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.type)) {
@@ -84,16 +191,29 @@ export default function CitizenReportPage() {
 
     setImageFile(file);
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result);
-    };
+    reader.onloadend = () => setImagePreview(reader.result);
     reader.readAsDataURL(file);
+
+    // Try to extract GPS from EXIF (JPEGs from phone cameras usually have this)
+    if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
+      const gps = await extractExifGps(file);
+      if (gps) {
+        setLatitude(gps.lat);
+        setLongitude(gps.lng);
+        setExifGpsDetected(true);
+        // Show coords immediately, then try to resolve a real address
+        setLocationAddress(`📍 GPS from photo: ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}`);
+        const address = await reverseGeocode(gps.lat, gps.lng);
+        if (address) setLocationAddress(address);
+      }
+    }
   };
 
   const handleRemovePhoto = () => {
     setImageFile(null);
     setImagePreview(null);
     setPhotoError('');
+    setExifGpsDetected(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
@@ -407,12 +527,22 @@ export default function CitizenReportPage() {
               </button>
             </div>
 
+            {/* EXIF GPS auto-detect badge */}
+            {exifGpsDetected && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-950/60 border border-emerald-700/50 text-emerald-400 text-[11px] font-semibold">
+                <span className="text-base leading-none">📡</span>
+                <span>GPS auto-detected from photo — location pre-filled! You can still adjust the pin manually.</span>
+              </div>
+            )}
+
             <input
               type="text"
               value={locationAddress}
               onChange={(e) => setLocationAddress(e.target.value)}
               placeholder="Street name, landmark, or area name"
-              className="w-full bg-[#0d1629] text-white text-xs px-3.5 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-blue-500"
+              className={`w-full bg-[#0d1629] text-white text-xs px-3.5 py-2 rounded-xl border focus:outline-none focus:border-blue-500 transition-colors ${
+                exifGpsDetected ? 'border-emerald-600/70' : 'border-slate-700'
+              }`}
             />
 
             {/* Small interactive Leaflet Map to adjust pin */}
@@ -422,6 +552,7 @@ export default function CitizenReportPage() {
               onChangeLocation={(lat, lng) => {
                 setLatitude(lat);
                 setLongitude(lng);
+                setExifGpsDetected(false);
                 setLocationAddress(`Pin: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
               }}
               height="200px"
