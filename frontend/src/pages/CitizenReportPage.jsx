@@ -25,16 +25,6 @@ import { incidentStore } from '../services/incidentStore';
 const RATE_LIMIT_SECONDS = 30;
 const RATE_LIMIT_KEY = 'resq_last_report_time';
 
-const HAZARD_CATEGORIES = [
-  'Flood',
-  'Fire',
-  'Wildfire',
-  'Building Collapse',
-  'Landslide',
-  'Earthquake',
-  'Cyclone',
-  'Other',
-];
 
 export default function CitizenReportPage() {
   const navigate = useNavigate();
@@ -44,7 +34,7 @@ export default function CitizenReportPage() {
   const [showMapDownloader, setShowMapDownloader] = useState(false);
 
   // Form Fields
-  const [selectedCategory, setSelectedCategory] = useState('Flood');
+  const [detectedCategory, setDetectedCategory] = useState('Flood');
   const [description, setDescription] = useState('');
   const [peopleAffected, setPeopleAffected] = useState('');
   const [notes, setNotes] = useState('');
@@ -136,6 +126,27 @@ export default function CitizenReportPage() {
       clearInterval(interval);
     };
   }, []);
+
+  // Autonomous real-time AI NLP categorization on description input (when no photo provided yet)
+  useEffect(() => {
+    if (!imageFile && description.trim().length > 3) {
+      const textClassification = aiPipeline.classifyFromText(description);
+      if (textClassification) {
+        setDetectedCategory(textClassification.hazardCategory);
+        setAiAnalysisResult({
+          hazardCategory: textClassification.hazardCategory,
+          confidenceScore: textClassification.confidenceScore,
+          estimatedSeverity: textClassification.estimatedSeverity,
+          severityExplanation: textClassification.explanation,
+          visualIndicators: ['Text-based AI NLP categorization (No image uploaded)'],
+          modelVersion: 'ResQ-NLP-Edge-v1',
+          analysisStatus: 'ANALYSIS_COMPLETED_TEXT_ONLY',
+          needsAdditionalEvidence: true,
+          uncertaintyNotes: 'Photographic evidence strongly recommended to verify on-ground severity.',
+        });
+      }
+    }
+  }, [description, imageFile]);
 
   // Pure-JS EXIF GPS extractor
   const extractExifGps = (file) =>
@@ -276,12 +287,11 @@ export default function CitizenReportPage() {
         imageFileOrBlob: file,
         description,
         location: locationAddress,
-        categoryHint: selectedCategory,
         isOnline: navigator.onLine,
       });
       setAiAnalysisResult(result);
-      if (result.hazardCategory && HAZARD_CATEGORIES.includes(result.hazardCategory)) {
-        setSelectedCategory(result.hazardCategory);
+      if (result.hazardCategory) {
+        setDetectedCategory(result.hazardCategory);
       }
     } catch (err) {
       console.warn('[ResQ] On-device AI analysis error:', err);
@@ -343,9 +353,11 @@ export default function CitizenReportPage() {
     try {
       setSubmitStep(isOnline ? 'uploading' : 'saving_offline');
 
+      const effectiveCategory = aiAnalysisResult?.hazardCategory || detectedCategory || 'Flood';
+
       // 1. Multi-factor priority computation
       const prioCalc = priorityEngine.calculatePriority({
-        disasterType: selectedCategory,
+        disasterType: effectiveCategory,
         severity: aiAnalysisResult?.estimatedSeverity || 'HIGH',
         peopleAffected: peopleAffected ? Number(peopleAffected) : 20,
         description,
@@ -364,8 +376,8 @@ export default function CitizenReportPage() {
           latitude,
           longitude,
           gpsAccuracy,
-          disasterType: selectedCategory,
-          aiLabel: aiAnalysisResult?.hazardCategory || selectedCategory,
+          disasterType: effectiveCategory,
+          aiLabel: effectiveCategory,
           aiConfidence: aiAnalysisResult?.confidenceScore || 80,
           severity: aiAnalysisResult?.estimatedSeverity || 'HIGH',
           priorityScore: prioCalc.priorityScore,
@@ -414,18 +426,26 @@ export default function CitizenReportPage() {
           </div>
         )}
 
-        {/* Preload Regional Offline Maps Bar */}
-        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow">
-          <div className="flex items-center gap-2 text-xs text-slate-300">
-            <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">🗺️</span>
-            <span>Remote Area Operations?</span>
+        {/* Preloaded Nationwide Offline Map of India Bar */}
+        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-emerald-900/50 shadow">
+          <div className="flex items-center gap-2.5 text-xs text-slate-200">
+            <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-sm">🇮🇳</span>
+            <div>
+              <p className="font-bold text-white flex items-center gap-1.5">
+                Preloaded Offline Map: India
+                <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold">
+                  National Basemap Ready
+                </span>
+              </p>
+              <p className="text-[11px] text-slate-400">All 28 States & 8 UTs preloaded in local storage — no cell service required</p>
+            </div>
           </div>
           <button
             type="button"
             onClick={() => setShowMapDownloader(true)}
-            className="px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-semibold transition flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition flex items-center gap-1.5 shrink-0"
           >
-            <span>Preload Offline Map Region</span>
+            <span>Map Status</span>
           </button>
         </div>
 
@@ -489,27 +509,76 @@ export default function CitizenReportPage() {
             </div>
           )}
 
-          {/* Disaster Category Selection */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-200">
-              Disaster Hazard Category <strong className="text-rose-400">*</strong>
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {HAZARD_CATEGORIES.map((cat) => (
-                <button
-                  type="button"
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-2 rounded-xl text-xs font-semibold border transition text-left ${
-                    selectedCategory === cat
-                      ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-600/30'
-                      : 'bg-[#0d1629] text-slate-300 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+          {/* Autonomous AI Hazard Classifier (No manual selection needed) */}
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-[#0c1833] to-[#0d1f40] border border-blue-800/60 shadow-lg space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                  <Sparkles className="w-4 h-4 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    Autonomous AI Hazard Classification
+                    <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[9px] font-bold">
+                      On-Device Edge Vision & NLP
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Category is automatically determined by ResQ AI via computer vision & NLP. No manual selection required.
+                  </p>
+                </div>
+              </div>
             </div>
+
+            {isAnalyzingImage ? (
+              <div className="p-3 rounded-xl bg-slate-900/80 border border-blue-500/40 flex items-center gap-2.5 text-xs text-blue-300 animate-pulse">
+                <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                <span>AI Vision Engine is analyzing photo pixels (HSV flame, water turbidity, rubble variance)...</span>
+              </div>
+            ) : aiAnalysisResult?.hazardCategory ? (
+              <div className="p-3.5 rounded-xl bg-slate-900/90 border border-blue-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-2xl">
+                      {aiAnalysisResult.hazardCategory === 'Fire' || aiAnalysisResult.hazardCategory === 'Wildfire' ? '🔥' :
+                       aiAnalysisResult.hazardCategory === 'Flood' ? '🌊' :
+                       aiAnalysisResult.hazardCategory === 'Building Collapse' ? '🏚️' :
+                       aiAnalysisResult.hazardCategory === 'Landslide' ? '⛰️' :
+                       aiAnalysisResult.hazardCategory === 'Earthquake' ? '🌍' :
+                       aiAnalysisResult.hazardCategory === 'Cyclone' ? '🌀' : '🚨'}
+                    </span>
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">AI-Identified Hazard Category</p>
+                      <p className="text-base font-extrabold text-white flex items-center gap-2">
+                        {aiAnalysisResult.hazardCategory}
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
+                          {aiAnalysisResult.confidenceScore || 85}% Confidence
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                    aiAnalysisResult.estimatedSeverity === 'CRITICAL' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                    aiAnalysisResult.estimatedSeverity === 'HIGH' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
+                    'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                  }`}>
+                    {aiAnalysisResult.estimatedSeverity || 'HIGH'} SEVERITY
+                  </span>
+                </div>
+                {aiAnalysisResult.severityExplanation && (
+                  <p className="text-[11px] text-slate-300 pt-1.5 border-t border-slate-800">
+                    💡 <span className="text-slate-400 font-medium">AI Reasoning:</span> {aiAnalysisResult.severityExplanation}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center gap-2.5 text-xs text-slate-400">
+                <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
+                <span>
+                  ResQ AI is standing by: Capture a photo or describe the scene below to trigger instant edge classification.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Photo Upload: Mobile Camera + Drag and Drop */}

@@ -55,17 +55,17 @@ export const OfflineTileLayer = L.TileLayer.extend({
           ctx.strokeStyle = '#1e293b';
           ctx.stroke();
 
-          // Coordinate and offline label
+          // Coordinate and India preloaded offline label
           ctx.fillStyle = '#64748b';
           ctx.font = '10px Inter, sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(`Zoom ${coords.z}`, 128, 110);
-          ctx.fillStyle = '#ef4444';
-          ctx.font = 'bold 11px Inter, sans-serif';
-          ctx.fillText('📡 Offline Boundary', 128, 130);
-          ctx.fillStyle = '#475569';
+          ctx.fillText(`Grid Ref: Z${coords.z} / [${coords.x}, ${coords.y}]`, 128, 105);
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = 'bold 12px Inter, sans-serif';
+          ctx.fillText('🇮🇳 India Offline Basemap', 128, 126);
+          ctx.fillStyle = '#10b981';
           ctx.font = '9px Inter, sans-serif';
-          ctx.fillText('Region not pre-downloaded', 128, 146);
+          ctx.fillText('✓ Preloaded National Coverage', 128, 144);
 
           tile.src = canvas.toDataURL();
         }

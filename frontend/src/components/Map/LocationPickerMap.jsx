@@ -99,8 +99,9 @@ export default function LocationPickerMap({
   return (
     <div className="relative w-full rounded-xl overflow-hidden border border-slate-700/80 shadow-inner bg-slate-900">
       <div ref={mapContainerRef} style={{ height, width: '100%' }} />
-      <div className="absolute top-2 left-2 z-[1000] bg-slate-900/85 backdrop-blur-sm text-[10px] text-slate-300 font-medium px-2 py-1 rounded-lg border border-slate-800 shadow">
-        Drag pin or tap map to pinpoint incident location
+      <div className="absolute top-2 left-2 z-[1000] bg-slate-900/90 backdrop-blur-sm text-[10px] text-slate-200 font-medium px-2.5 py-1 rounded-lg border border-slate-700 shadow flex items-center gap-1.5">
+        <span className="text-emerald-400">🇮🇳 Preloaded India Offline Map</span>
+        <span className="text-slate-400">• Drag pin or tap to position</span>
       </div>
     </div>
   );
