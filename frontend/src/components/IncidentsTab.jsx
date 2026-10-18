@@ -9,8 +9,10 @@ import {
   Search, 
   X, 
   Trash2, 
-  Calendar 
+  Calendar,
+  Sparkles 
 } from 'lucide-react';
+import { aiPipeline } from '../services/aiPipeline';
 
 export default function IncidentsTab({ incidents = [], onAddIncident, onDeleteIncident }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -264,23 +266,12 @@ export default function IncidentsTab({ incidents = [], onAddIncident, onDeleteIn
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-slate-300 font-medium">Disaster Type *</label>
-                  <select
-                    name="disasterType"
-                    value={formData.disasterType}
-                    onChange={handleInputChange}
-                    className="w-full p-2 bg-slate-950 text-white rounded-lg border border-slate-800 focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="FLOOD">Flood</option>
-                    <option value="EARTHQUAKE">Earthquake</option>
-                    <option value="FIRE">Fire</option>
-                    <option value="LANDSLIDE">Landslide</option>
-                    <option value="CYCLONE">Cyclone</option>
-                    <option value="BUILDING_COLLAPSE">Building Collapse</option>
-                  </select>
-                </div>
+              <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/40 text-xs text-blue-200 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
+                <span>
+                  <strong>AI Hazard Detection:</strong> The disaster category is automatically classified by on-device AI from the situation description.
+                </span>
+              </div>
                 <div className="space-y-1">
                   <label className="text-slate-300 font-medium">Severity Level *</label>
                   <select

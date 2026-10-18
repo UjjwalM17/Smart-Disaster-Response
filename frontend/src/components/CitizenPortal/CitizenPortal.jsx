@@ -203,18 +203,11 @@ export default function CitizenPortal({ onSubmitReport, liveIncidents = [] }) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-slate-300 font-medium">Disaster Type *</label>
-                  <select
-                    value={formData.disasterType}
-                    onChange={(e) => setFormData({ ...formData, disasterType: e.target.value })}
-                    className="w-full bg-[#0e1627] text-white p-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="FLOOD">Flash Flood / High Water</option>
-                    <option value="FIRE">Structural Fire</option>
-                    <option value="BUILDING_COLLAPSE">Building Collapse</option>
-                    <option value="LANDSLIDE">Landslide / Mudflow</option>
-                    <option value="CYCLONE">Severe Cyclone / Storm</option>
-                  </select>
+                  <label className="text-slate-300 font-medium">AI Incident Triage</label>
+                  <div className="p-2.5 rounded-xl bg-[#0a1020] border border-slate-800 text-xs text-blue-300 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
+                    <span>Auto-classified by ResQ Edge AI</span>
+                  </div>
                 </div>
               </div>
 
