@@ -7,6 +7,7 @@
 import { offlineDb } from './offlineDb';
 
 export const INDIA_NATIONAL_PACKAGE = {
+  regionId: 'india-national',
   packageId: 'india-national',
   name: 'Preloaded Offline Map of India',
   subtitle: 'National Basemap Coverage',
@@ -120,19 +121,21 @@ export const mapPackageService = {
         if (resp.ok) {
           const blob = await resp.blob();
           totalBytes += blob.size;
-          await offlineDb.saveTile(z, x, y, blob, INDIA_NATIONAL_PACKAGE.packageId);
+          await offlineDb.saveTile(z, x, y, blob, INDIA_NATIONAL_PACKAGE.regionId);
         }
       } catch {
         // Fallback to offline canvas
       }
       completed++;
       onProgress({ completed, total, percentage: Math.round((completed / total) * 100) });
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 60));
     }
 
     const metadata = {
       ...INDIA_NATIONAL_PACKAGE,
-      tileCount: completed,
+      regionId: INDIA_NATIONAL_PACKAGE.regionId,
+      packageId: INDIA_NATIONAL_PACKAGE.packageId,
+      tileCount: completed || INDIA_NATIONAL_PACKAGE.tileCount,
       sizeBytes: totalBytes || INDIA_NATIONAL_PACKAGE.sizeBytes,
       status: 'ACTIVE_PRELOADED',
       downloadedAt: new Date().toISOString(),
@@ -140,7 +143,7 @@ export const mapPackageService = {
 
     await offlineDb.saveRegionMetadata(metadata);
     await offlineDb.logAudit('INDIA_MAP_CACHE_REFRESHED', 'Local Device', {
-      packageId: INDIA_NATIONAL_PACKAGE.packageId,
+      regionId: INDIA_NATIONAL_PACKAGE.regionId,
       tiles: completed,
     });
 

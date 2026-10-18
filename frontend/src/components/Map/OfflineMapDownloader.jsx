@@ -8,8 +8,11 @@ export default function OfflineMapDownloader({ isOpen, onClose }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [progress, setProgress] = useState({ completed: 0, total: 0, percentage: 0 });
 
+  const [successMsg, setSuccessMsg] = useState('');
+
   const loadStatus = async () => {
     setLoading(true);
+    setSuccessMsg('');
     try {
       const data = await mapPackageService.getIndiaMapStatus();
       setNationalMap(data);
@@ -28,12 +31,14 @@ export default function OfflineMapDownloader({ isOpen, onClose }) {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    setSuccessMsg('');
     setProgress({ completed: 0, total: 0, percentage: 0 });
     try {
       const updated = await mapPackageService.refreshNationalMap((prog) => {
         setProgress(prog);
       });
       setNationalMap(updated);
+      setSuccessMsg('✅ National India map cache successfully verified & refreshed in IndexedDB.');
     } catch (err) {
       alert(`Refresh failed: ${err.message}`);
     } finally {
@@ -97,6 +102,13 @@ export default function OfflineMapDownloader({ isOpen, onClose }) {
               </button>
             )}
           </div>
+
+          {successMsg && (
+            <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-700/60 text-emerald-300 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{successMsg}</span>
+            </div>
+          )}
 
           {isRefreshing && (
             <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">

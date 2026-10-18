@@ -231,16 +231,38 @@ class OfflineDbService {
   }
 
   /**
+   * Retrieves metadata for a pre-downloaded offline map region
+   */
+  async getRegionMetadata(regionId) {
+    const db = await this.getDb();
+    const id = regionId || 'india-national';
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(['offline_regions'], 'readonly');
+      const store = tx.objectStore('offline_regions');
+      const req = store.get(id);
+
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = (e) => reject(e.target.error);
+    });
+  }
+
+  /**
    * Saves metadata for a pre-downloaded offline map region
    */
   async saveRegionMetadata(region) {
     const db = await this.getDb();
+    const normalized = {
+      ...region,
+      regionId: region.regionId || region.packageId || 'india-national',
+      packageId: region.packageId || region.regionId || 'india-national',
+    };
+
     return new Promise((resolve, reject) => {
       const tx = db.transaction(['offline_regions'], 'readwrite');
       const store = tx.objectStore('offline_regions');
-      const req = store.put(region);
+      const req = store.put(normalized);
 
-      req.onsuccess = () => resolve(region);
+      req.onsuccess = () => resolve(normalized);
       req.onerror = (e) => reject(e.target.error);
     });
   }
