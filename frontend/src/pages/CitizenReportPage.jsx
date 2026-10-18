@@ -68,6 +68,41 @@ export default function CitizenReportPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Auto-detect GPS location on page load
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    setLocating(true);
+    setLocationAddress('📡 Detecting your location...');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        setLatitude(lat);
+        setLongitude(lng);
+        setLocating(false);
+        setLocationAddress(`GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        // Reverse geocode to real address
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+            { headers: { 'Accept-Language': 'en' } }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data.display_name) setLocationAddress(data.display_name);
+          }
+        } catch {
+          // keep the coordinates string if geocoding fails
+        }
+      },
+      () => {
+        // Permission denied or unavailable — fall back silently
+        setLocating(false);
+        setLocationAddress('Central District, New Delhi');
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  }, []);
+
   // ─── Pure-JS EXIF GPS extractor (no library needed) ───────────────────────
   const extractExifGps = (file) =>
     new Promise((resolve) => {
