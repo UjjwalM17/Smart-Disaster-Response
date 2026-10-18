@@ -1,68 +1,45 @@
-import React, { useState } from 'react';
-import { ArrowUpRight, CheckCircle, Check, X } from 'lucide-react';
+import React from 'react';
+import { ArrowUpRight, Sparkles, CheckCircle2, AlertTriangle, Eye } from 'lucide-react';
 import { getDisasterImage } from '../../utils/disasterAssets';
 import IncidentImage from '../common/IncidentImage';
 
-import { incidentStore } from '../../services/incidentStore';
-
-export default function VerificationQueueTable({ incidents = [], onViewAll, onVerify, onReject }) {
-  // Derive unverified incidents from real database list
-  const pendingFromProps = (incidents || [])
-    .filter((inc) => !inc.verified)
-    .map((inc) => ({
+export default function VerificationQueueTable({ incidents = [], onViewAll, onSelectIncident }) {
+  // Map incidents for the AI Triage telemetry feed
+  const feedItems = (incidents || []).slice(0, 5).map((inc) => {
+    const isAutoVerified = Boolean(inc.verified) && (!inc.aiConfidence || inc.aiConfidence >= 70);
+    return {
       id: `#INC-${String(inc.incidentId || inc.id).padStart(3, '0')}`,
       rawId: inc.incidentId || inc.id,
+      rawIncident: inc,
       image: inc.imageUrl || getDisasterImage(inc.disasterType || 'Flood'),
       assessment: `${inc.disasterType || inc.aiLabel || 'Flood'} (${inc.severity || 'HIGH'})`,
       confidence: `Confidence: ${inc.aiConfidence || 85}%`,
       priorityScore: inc.priorityScore || 70,
-    }));
-
-  const [localDismissed, setLocalDismissed] = useState(new Set());
-
-  const queue = pendingFromProps.filter((item) => !localDismissed.has(item.rawId));
-
-  const handleVerifyItem = async (rawId) => {
-    setLocalDismissed((prev) => new Set([...prev, rawId]));
-    try {
-      await incidentStore.verifyIncident(rawId, true, 'Verified from Operations Verification Queue');
-    } catch (e) {
-      console.warn('Verify error:', e);
-    }
-    if (onVerify) onVerify(rawId);
-  };
-
-  const handleRejectItem = async (rawId) => {
-    setLocalDismissed((prev) => new Set([...prev, rawId]));
-    try {
-      await incidentStore.rejectIncident(rawId, 'Rejected from Operations Verification Queue');
-    } catch (e) {
-      console.warn('Reject error:', e);
-    }
-    if (onReject) onReject(rawId);
-  };
+      isAutoVerified,
+    };
+  });
 
   return (
     <div className="bg-[#121b2f] border border-slate-800/80 rounded-2xl p-5 hover:border-slate-700/80 transition-all flex flex-col justify-between">
       <div>
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-3">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-purple-950/80 border border-purple-800/60 flex items-center justify-center text-purple-400">
-              <CheckCircle className="w-3.5 h-3.5" />
+            <div className="w-6 h-6 rounded-lg bg-blue-950/80 border border-blue-800/60 flex items-center justify-center text-blue-400">
+              <Sparkles className="w-3.5 h-3.5" />
             </div>
-            <h3 className="text-sm font-bold text-white">Verification Queue</h3>
+            <h3 className="text-sm font-bold text-white">AI Autonomous Triage Feed</h3>
           </div>
           <button
             onClick={onViewAll}
             className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1"
           >
-            View All <ArrowUpRight className="w-3.5 h-3.5" />
+            Full Monitor <ArrowUpRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {queue.length === 0 ? (
+        {feedItems.length === 0 ? (
           <p className="text-xs text-slate-500 py-10 text-center">
-            All pending incidents verified! Queue is clear.
+            No incidents reported yet.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -73,18 +50,19 @@ export default function VerificationQueueTable({ incidents = [], onViewAll, onVe
                   <th className="pb-2.5">Image</th>
                   <th className="pb-2.5">AI Assessment</th>
                   <th className="pb-2.5">Priority</th>
+                  <th className="pb-2.5">Status</th>
                   <th className="pb-2.5 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
-                {queue.map((row) => (
+                {feedItems.map((row) => (
                   <tr key={row.id} className="hover:bg-[#131d33] transition-colors group">
                     <td className="py-2.5 font-mono text-[11px] text-slate-400">{row.id}</td>
                     <td className="py-2.5">
                       <IncidentImage
                         src={row.image}
                         disasterType={row.assessment}
-                        alt="queue item"
+                        alt="feed item"
                         className="w-10 h-8 rounded-lg object-cover border border-slate-700/60"
                       />
                     </td>
@@ -107,21 +85,25 @@ export default function VerificationQueueTable({ incidents = [], onViewAll, onVe
                         {row.priorityScore}
                       </span>
                     </td>
+                    <td className="py-2.5">
+                      {row.isAutoVerified ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400">
+                          <CheckCircle2 className="w-3 h-3" /> Auto-Verified
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400">
+                          <AlertTriangle className="w-3 h-3" /> Flagged Low-Conf
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleVerifyItem(row.id)}
-                          className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-[10px] font-bold transition-all shadow-sm"
-                        >
-                          Verify
-                        </button>
-                        <button
-                          onClick={() => handleRejectItem(row.id)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-red-950/80 text-slate-400 hover:text-red-400 border border-slate-700/60 hover:border-red-800/80 text-[10px] font-bold transition-all"
-                        >
-                          Reject
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => onSelectIncident && onSelectIncident(row.rawIncident)}
+                        className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                        title="View Telemetry"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
                     </td>
                   </tr>
                 ))}

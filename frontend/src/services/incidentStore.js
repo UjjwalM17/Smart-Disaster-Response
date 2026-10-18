@@ -7,7 +7,7 @@
 import { api } from './api';
 import { getDisasterImage } from '../utils/disasterAssets';
 
-const LOCAL_STORAGE_KEY = 'resq_rich_incidents_v6';
+const LOCAL_STORAGE_KEY = 'resq_rich_incidents_v7';
 
 const INITIAL_INCIDENTS = [
   {
@@ -892,17 +892,25 @@ function getStoredIncidents() {
       list = JSON.parse(raw);
     }
 
-    // Auto-migrate stale URLs: Unsplash (broken CORS) or old SVG data URIs → local photo paths
+    // Auto-migrate stale URLs and align AI verification statuses
     let modified = false;
     const cleanList = list.map((inc) => {
       const needsMigration = !inc.imageUrl ||
         (typeof inc.imageUrl === 'string' && inc.imageUrl.includes('unsplash.com')) ||
         (typeof inc.imageUrl === 'string' && inc.imageUrl.startsWith('data:image/svg'));
-      if (needsMigration) {
+      
+      const conf = inc.aiConfidence != null ? Number(inc.aiConfidence) : 85;
+      const isAutoVerified = conf >= 70;
+      const verified = inc.verified != null ? inc.verified : isAutoVerified;
+      const verificationStatus = verified ? 'AUTO_VERIFIED' : 'FLAGGED_LOW_CONFIDENCE';
+
+      if (needsMigration || inc.verificationStatus === 'PENDING' || inc.verificationStatus === 'VERIFIED') {
         modified = true;
         return {
           ...inc,
-          imageUrl: getDisasterImage(inc.disasterType || inc.aiLabel || 'Flood'),
+          verified,
+          verificationStatus,
+          imageUrl: needsMigration ? getDisasterImage(inc.disasterType || inc.aiLabel || 'Flood') : inc.imageUrl,
         };
       }
       return inc;
@@ -937,19 +945,20 @@ export const incidentStore = {
       const backendList = await api.getIncidents();
       if (Array.isArray(backendList) && backendList.length > 0) {
         combinedList = backendList.map((inc) => {
-          const isVerified = Boolean(inc.verified);
+          const isVerified = Boolean(inc.verified) || (inc.aiConfidence != null && inc.aiConfidence >= 70);
           const hasDispatched = inc.status === 'IN_PROGRESS' || inc.status === 'COMPLETED';
 
           return {
             ...inc,
             id: inc.incidentId,
-            verificationStatus: isVerified ? 'VERIFIED' : 'PENDING',
+            verified: isVerified,
+            verificationStatus: isVerified ? 'AUTO_VERIFIED' : 'FLAGGED_LOW_CONFIDENCE',
             syncStatus: inc.syncStatus || 'SYNCED',
             timeline: [
               { stage: 'Received', time: 'Received', done: true },
-              { stage: 'Under verification', time: 'In progress', done: true },
-              { stage: 'Verified', time: isVerified ? 'Verified' : 'Pending', done: isVerified },
-              { stage: 'Response dispatched', time: hasDispatched ? 'Dispatched' : 'Pending', done: hasDispatched },
+              { stage: 'AI Auto-Verification', time: isVerified ? 'Auto-Verified (>=70%)' : 'Flagged Low-Confidence (<70%)', done: true },
+              { stage: 'Autonomous Triage', time: `${inc.severity || 'HIGH'} Priority (${inc.priorityScore || 70})`, done: true },
+              { stage: 'Automated Response', time: hasDispatched ? 'Dispatched' : isVerified ? 'Alert & Quota Prepared' : 'Standby for Review', done: isVerified },
             ],
           };
         });
@@ -1011,6 +1020,7 @@ export const incidentStore = {
   async createIncident(formData, mediaBlob = null) {
     const { offlineDb, SYNC_STATUS } = await import('./offlineDb');
     const { syncEngine } = await import('./syncEngine');
+    const { duplicateDetectionEngine } = await import('./duplicateDetectionEngine');
 
     // Generate unique idempotency key
     const clientIncidentId = formData.clientIncidentId || `RESQ-CLI-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
@@ -1022,6 +1032,39 @@ export const incidentStore = {
     else if (prio >= 30) severityEnum = 'MEDIUM';
     else severityEnum = 'LOW';
 
+    // 1. Automatic Duplicate Detection & Spatial-Temporal Clustering
+    const existingIncidents = getStoredIncidents();
+    let duplicateGroupId = formData.duplicateGroupId || null;
+    let duplicateMatch = null;
+
+    if (formData.latitude && formData.longitude) {
+      for (const existing of existingIncidents) {
+        const dupCheck = duplicateDetectionEngine.isDuplicatePair(formData, existing);
+        if (dupCheck.isDuplicate) {
+          duplicateMatch = existing;
+          duplicateGroupId = existing.duplicateGroupId || `GRP-${existing.incidentId || existing.id || 'CLUSTER'}`;
+          break;
+        }
+      }
+    }
+
+    // 2. Autonomous AI Verification Decision
+    const confidence = formData.aiConfidence != null ? Number(formData.aiConfidence) : 85;
+    const isAutoVerified = confidence >= 70;
+
+    let notesText = formData.notes || '';
+    if (duplicateMatch) {
+      const dupNote = `[Duplicate Corroboration: Clustered with #${duplicateMatch.incidentId || duplicateMatch.id}]`;
+      notesText = notesText ? `${notesText} | ${dupNote}` : dupNote;
+    }
+    if (isAutoVerified) {
+      const autoNote = `[AI Auto-Verified: Confidence ${confidence}% >= 70%]`;
+      notesText = notesText ? `${notesText} | ${autoNote}` : autoNote;
+    } else {
+      const flagNote = `[AI Flagged: Low Confidence (${confidence}%) - Uncertain Prediction]`;
+      notesText = notesText ? `${notesText} | ${flagNote}` : flagNote;
+    }
+
     const incidentRecord = {
       clientIncidentId,
       reporterName: formData.reporterName || 'Citizen Reporter',
@@ -1032,28 +1075,55 @@ export const incidentStore = {
       latitude: formData.latitude || null,
       longitude: formData.longitude || null,
       disasterType: formData.aiLabel || formData.disasterType || 'Flood',
-      aiLabel: formData.aiLabel || 'Flood',
-      aiConfidence: formData.aiConfidence || 85,
+      aiLabel: formData.aiLabel || formData.disasterType || 'Flood',
+      aiConfidence: confidence,
       severity: severityEnum,
       priorityScore: formData.priorityScore || prio,
       peopleAffected: formData.peopleAffected ? Number(formData.peopleAffected) : 20,
       description: formData.description || 'Disaster incident reported.',
-      notes: formData.notes || '',
+      notes: notesText,
+      duplicateGroupId,
       imageUrl: formData.imageUrl || getDisasterImage(formData.aiLabel || 'Flood'),
-      status: 'REPORTED',
-      verified: false,
-      verificationStatus: 'PENDING',
+      status: isAutoVerified ? 'IN_PROGRESS' : 'REPORTED',
+      verified: isAutoVerified,
+      verificationStatus: isAutoVerified ? 'AUTO_VERIFIED' : 'FLAGGED_LOW_CONFIDENCE',
       reportedBy: formData.reportedBy || 'Citizen PWA',
       reportedTime: new Date().toISOString(),
       syncStatus: SYNC_STATUS.SAVED_OFFLINE,
       gpsAccuracy: formData.gpsAccuracy || null,
+      timeline: [
+        { stage: 'Received', time: 'Received', done: true },
+        {
+          stage: 'AI Auto-Verification',
+          time: isAutoVerified ? 'Auto-Verified (>=70%)' : 'Flagged Low-Confidence (<70%)',
+          done: true,
+        },
+        {
+          stage: 'Autonomous Triage',
+          time: `${severityEnum} Priority (${formData.priorityScore || prio})`,
+          done: true,
+        },
+        {
+          stage: 'Automated Response',
+          time: isAutoVerified ? 'Alert & Mission Quota Auto-Generated' : 'Standby for Review',
+          done: isAutoVerified,
+        },
+      ],
     };
 
-    // 1. Durably save in IndexedDB first
+    // 3. Durably save in IndexedDB first
     await offlineDb.saveIncident(incidentRecord, mediaBlob);
-    await offlineDb.logAudit('OFFLINE_REPORT_CREATED', incidentRecord.reporterName, { clientIncidentId });
+    await offlineDb.logAudit(
+      isAutoVerified ? 'INCIDENT_AI_AUTO_VERIFIED' : 'INCIDENT_AI_FLAGGED_LOW_CONFIDENCE',
+      'ResQ-AI-Engine',
+      { clientIncidentId, confidence, isAutoVerified, duplicateGroupId }
+    );
 
-    // 2. If online, attempt immediate sync via Gateway
+    // Also update local cache for instant UI consistency
+    const updatedLocal = [incidentRecord, ...existingIncidents.filter((i) => i.clientIncidentId !== clientIncidentId)];
+    saveStoredIncidents(updatedLocal);
+
+    // 4. If online, attempt immediate sync via Gateway
     if (typeof navigator !== 'undefined' && navigator.onLine) {
       try {
         const backendResp = await api.createIncident({
@@ -1069,6 +1139,22 @@ export const incidentStore = {
           await offlineDb.updateIncidentStatus(clientIncidentId, SYNC_STATUS.SYNCED, {
             serverIncidentId: backendResp.incidentId,
           });
+
+          // Automated Response: If auto-verified & high/critical severity, trigger automated alert
+          if (isAutoVerified && (severityEnum === 'HIGH' || (formData.priorityScore || prio) >= 70)) {
+            try {
+              await api.createAlert({
+                incidentId: backendResp.incidentId,
+                title: `[AI AUTO-ALERT] ${incidentRecord.disasterType} at ${incidentRecord.location}`,
+                message: `AI autonomous triage verified ${incidentRecord.disasterType} with ${confidence}% confidence. Severity: ${severityEnum}, Urgency score: ${incidentRecord.priorityScore}. Response units notified.`,
+                severity: severityEnum,
+                status: 'ACTIVE',
+                broadcastArea: incidentRecord.location,
+              });
+            } catch (alertErr) {
+              console.warn('Automated alert dispatch warning:', alertErr.message);
+            }
+          }
         }
       } catch (err) {
         console.warn('Network sync interrupted; report safely stored offline in IndexedDB:', err.message);

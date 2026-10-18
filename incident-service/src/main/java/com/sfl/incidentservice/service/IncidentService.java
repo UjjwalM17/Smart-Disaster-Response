@@ -37,9 +37,33 @@ public class IncidentService {
 
         Incident incident = mapToEntity(request);
 
-        if (incident.getStatus() == null) {
-            incident.setStatus(IncidentStatus.REPORTED);
+        // AI Autonomous Verification & Triage Logic
+        if (request.getAiConfidence() != null && request.getAiConfidence() >= 70.0) {
+            incident.setVerified(true);
+            if (incident.getStatus() == null || incident.getStatus() == IncidentStatus.REPORTED) {
+                incident.setStatus(IncidentStatus.IN_PROGRESS);
+            }
+            String autoNote = "[AI Auto-Verified: Confidence " + request.getAiConfidence() + "% >= 70%]";
+            if (incident.getNotes() == null || !incident.getNotes().contains("AI Auto-Verified")) {
+                incident.setNotes(incident.getNotes() != null && !incident.getNotes().trim().isEmpty()
+                    ? incident.getNotes() + " | " + autoNote
+                    : autoNote);
+            }
+        } else {
+            incident.setVerified(false);
+            if (incident.getStatus() == null) {
+                incident.setStatus(IncidentStatus.REPORTED);
+            }
+            if (request.getAiConfidence() != null) {
+                String flagNote = "[AI Flagged: Low Confidence (" + request.getAiConfidence() + "%) - Uncertain Prediction]";
+                if (incident.getNotes() == null || !incident.getNotes().contains("AI Flagged")) {
+                    incident.setNotes(incident.getNotes() != null && !incident.getNotes().trim().isEmpty()
+                        ? incident.getNotes() + " | " + flagNote
+                        : flagNote);
+                }
+            }
         }
+
         if (incident.getReportedTime() == null) {
             incident.setReportedTime(LocalDateTime.now());
         }
@@ -165,7 +189,9 @@ public class IncidentService {
         incident.setPriorityScore(request.getPriorityScore());
         incident.setAiLabel(request.getAiLabel());
         incident.setAiConfidence(request.getAiConfidence());
-        incident.setVerified(request.getVerified() != null ? request.getVerified() : false);
+        boolean isVerified = (request.getAiConfidence() != null && request.getAiConfidence() >= 70.0)
+                || Boolean.TRUE.equals(request.getVerified());
+        incident.setVerified(isVerified);
         incident.setClientIncidentId(request.getClientIncidentId());
         incident.setDuplicateGroupId(request.getDuplicateGroupId());
         incident.setPeopleAffected(request.getPeopleAffected());

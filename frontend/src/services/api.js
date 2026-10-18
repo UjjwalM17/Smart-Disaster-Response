@@ -114,4 +114,15 @@ export const api = {
   getAlerts: () => fetch(`${BASE_URL}/alerts`).then(handleResponse),
   getAlertsByMission: (missionId) =>
     fetch(`${BASE_URL}/alerts/mission/${missionId}`).then(handleResponse),
+  createAlert: (data) =>
+    fetch(`${BASE_URL}/alerts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        missionId: data.missionId || 1,
+        alertType: data.alertType || 'PUSH_NOTIFICATION',
+        message: data.message || data.title || 'Emergency Disaster Alert',
+        severity: data.severity === 'CRITICAL' ? 'CRITICAL' : data.severity === 'LOW' ? 'LOW' : 'HIGH',
+      }),
+    }).then(handleResponse),
 };

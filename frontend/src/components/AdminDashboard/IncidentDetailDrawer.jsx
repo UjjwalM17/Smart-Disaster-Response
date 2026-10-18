@@ -200,6 +200,56 @@ export default function IncidentDetailDrawer({ incident, isOpen, onClose, onMiss
             </div>
           </div>
 
+          {/* AI Autonomous Verification & Triage Telemetry Card */}
+          <div className="p-4 bg-[#111c34] border border-blue-900/50 rounded-2xl space-y-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-blue-400" /> Autonomous AI Processing Telemetry
+              </span>
+              <span className="text-[10px] font-mono text-slate-400">Model: ResQ-Vision-Edge-v2</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">Verification Decision</span>
+                <div className="mt-1">
+                  {incident.verified ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Auto-Verified (≥70%)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Flagged Low-Conf (&lt;70%)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">Duplicate Check</span>
+                <div className="mt-1 text-[11px] font-semibold text-slate-200">
+                  {incident.duplicateGroupId ? (
+                    <span className="text-blue-400">Clustered ({incident.duplicateGroupId})</span>
+                  ) : (
+                    <span className="text-emerald-400">Unique Report</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="text-[11px] p-2.5 rounded-xl bg-blue-950/40 border border-blue-900/40 text-blue-200 space-y-1">
+              <div className="font-semibold flex items-center gap-1">
+                <span>⚡ Lifecycle Status:</span>
+                <span className="text-white font-bold">{incident.status || 'IN_PROGRESS'}</span>
+              </div>
+              <p className="text-slate-400 text-[10px]">
+                {incident.verified 
+                  ? 'Autonomous AI verification confirmed hazard. Automated alert issued & response units queued.'
+                  : 'Low confidence prediction flagged for human safety confirmation before operational escalation.'}
+              </p>
+            </div>
+          </div>
+
           {/* Description */}
           <div className="p-3.5 bg-[#131f38] border border-slate-800/80 rounded-xl text-xs space-y-1">
             <span className="text-slate-400 text-[10px] uppercase font-bold">Field Description & Notes</span>

@@ -48,13 +48,13 @@ export default function AdminLayout() {
     }
   }, [navigate]);
 
-  // Poll / load pending count for Verification badge
+  // Poll / load low-confidence flagged count for AI Triage badge
   useEffect(() => {
     const updateCounts = async () => {
       try {
         const incidents = await incidentStore.getAllIncidents();
-        const pending = incidents.filter((i) => !i.verified && i.verificationStatus !== 'REJECTED').length;
-        setPendingCount(pending);
+        const flagged = incidents.filter((i) => !i.verified || i.verificationStatus === 'FLAGGED_LOW_CONFIDENCE').length;
+        setPendingCount(flagged);
       } catch (e) {
         // Fallback
       }
@@ -72,11 +72,11 @@ export default function AdminLayout() {
 
   const navLinks = [
     { to: '/admin', label: 'Command Center', icon: LayoutDashboard },
-    { to: '/admin/incidents', label: 'Incidents', icon: AlertOctagon },
+    { to: '/admin/incidents', label: 'Disaster History', icon: AlertOctagon },
     {
       to: '/admin/verification',
-      label: 'Verification',
-      icon: CheckCircle,
+      label: 'AI Triage & Monitor',
+      icon: Sparkles,
       badge: pendingCount,
     },
     { to: '/admin/resources', label: 'Resources', icon: Layers },

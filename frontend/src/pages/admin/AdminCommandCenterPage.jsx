@@ -37,10 +37,6 @@ export default function AdminCommandCenterPage() {
   // Caller Report modal
   const [isCallerModalOpen, setIsCallerModalOpen] = useState(false);
 
-  // Reject reason modal state
-  const [rejectModalIncident, setRejectModalIncident] = useState(null);
-  const [rejectReason, setRejectReason] = useState('Duplicate report / unverified');
-
   const loadData = async () => {
     setLoading(true);
     try {
@@ -71,37 +67,17 @@ export default function AdminCommandCenterPage() {
     setIsDrawerOpen(true);
   };
 
-  const handleVerify = async (id) => {
-    await incidentStore.verifyIncident(id);
-    loadData();
-  };
-
-  const handleOpenRejectModal = (inc) => {
-    setRejectModalIncident(inc);
-  };
-
-  const handleConfirmReject = async () => {
-    if (rejectModalIncident) {
-      await incidentStore.rejectIncident(rejectModalIncident.incidentId || rejectModalIncident.id, rejectReason);
-      setRejectModalIncident(null);
-      loadData();
-    }
-  };
-
   // KPI Calculations
   const totalIncidents = incidents.length;
   const criticalCount = incidents.filter((i) => (i.priorityScore || 0) >= 75).length;
-  const pendingVerification = incidents.filter(
-    (i) => !i.verified && i.verificationStatus !== 'REJECTED'
-  ).length;
+  const autoVerifiedCount = incidents.filter((i) => i.verified).length;
+  const flaggedExceptionsCount = incidents.filter((i) => !i.verified).length;
   const activeTeamsCount = teams.filter(
     (t) => (t.availabilityStatus || '').toUpperCase() !== 'OFF_DUTY'
   ).length;
 
-  // Verification Queue items
-  const verificationQueue = incidents.filter(
-    (i) => !i.verified && i.verificationStatus !== 'REJECTED'
-  );
+  // Stream of recent automatically triaged incidents
+  const recentTriageStream = [...incidents].slice(0, 8);
 
   return (
     <div className="space-y-6">
@@ -145,7 +121,8 @@ export default function AdminCommandCenterPage() {
       <StatCards
         totalIncidents={totalIncidents}
         criticalPriority={criticalCount}
-        awaitingVerification={pendingVerification}
+        awaitingVerification={flaggedExceptionsCount}
+        autoVerifiedCount={autoVerifiedCount}
         availableTeams={activeTeamsCount}
         reliefSupplies={resources.reduce((sum, r) => sum + (Number(r.quantity) || 0), 350)}
       />
@@ -340,25 +317,37 @@ export default function AdminCommandCenterPage() {
         />
       </div>
 
-      {/* Verification Queue Table */}
+      {/* Autonomous AI Incident Triage Stream */}
       <div className="bg-[#121b2f] border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <h3 className="text-sm font-bold text-white">Verification Queue</h3>
-            <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
-              {verificationQueue.length} Pending
-            </span>
+            <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white">Autonomous AI Incident Triage Stream</h3>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
+                  {autoVerifiedCount} Auto-Verified
+                </span>
+                {flaggedExceptionsCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">
+                    {flaggedExceptionsCount} Flagged Low-Conf
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400">
+                Routine reports are verified & prioritized automatically — eliminating manual verification bottlenecks
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-slate-400">
-            Citizen and field submissions awaiting commander verification
-          </p>
         </div>
 
-        {verificationQueue.length === 0 ? (
+        {recentTriageStream.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-400 space-y-2">
             <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
-            <p className="font-semibold text-slate-200">Verification Queue is Clear</p>
-            <p>All citizen incident reports have been verified or addressed.</p>
+            <p className="font-semibold text-slate-200">No Incidents Reported</p>
+            <p>Awaiting incoming incident streams from citizens and field units.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -367,24 +356,26 @@ export default function AdminCommandCenterPage() {
                 <tr>
                   <th className="py-3 px-4">Incident</th>
                   <th className="py-3 px-4">Photo Preview</th>
-                  <th className="py-3 px-4">AI Assessment & Confidence</th>
+                  <th className="py-3 px-4">AI Prediction & Confidence</th>
                   <th className="py-3 px-4">Priority Badge</th>
                   <th className="py-3 px-4">Location</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-3 px-4">Autonomous Status</th>
+                  <th className="py-3 px-4 text-right">Telemetry</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
-                {verificationQueue.map((inc) => {
+                {recentTriageStream.map((inc) => {
                   const score = inc.priorityScore || 50;
                   const color = getPriorityColor(score);
                   const label = getPriorityLabel(score);
+                  const isVerified = Boolean(inc.verified);
 
                   return (
                     <tr key={inc.incidentId || inc.id} className="hover:bg-slate-800/40 transition-colors">
                       <td className="py-3 px-4 font-mono font-bold text-slate-300">
                         #{inc.incidentId || inc.id}
                         <div className="text-[10px] text-slate-500 font-normal">
-                          {inc.reportedBy || 'Citizen'}
+                          {inc.reportedBy || 'Citizen PWA'}
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -401,8 +392,8 @@ export default function AdminCommandCenterPage() {
                           <Sparkles className="w-3.5 h-3.5 text-blue-400" />
                           <span>{inc.aiLabel || inc.disasterType}</span>
                         </div>
-                        <span className="text-[10px] text-emerald-400 font-medium">
-                          {inc.aiConfidence || 92}% Confidence
+                        <span className={`text-[10px] font-medium ${isVerified ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {inc.aiConfidence || 85}% Confidence
                         </span>
                       </td>
                       <td className="py-3 px-4">
@@ -420,25 +411,24 @@ export default function AdminCommandCenterPage() {
                       <td className="py-3 px-4 text-slate-300 max-w-xs truncate">
                         {inc.location}
                       </td>
-                      <td className="py-3 px-4 text-right space-x-2">
+                      <td className="py-3 px-4">
+                        {isVerified ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Auto-Verified
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                            <AlertTriangle className="w-3 h-3 text-amber-400" /> Low-Confidence Flag
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-right">
                         <button
                           onClick={() => handleOpenDrawer(inc)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
-                          title="View Drawer"
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                          title="Open Telemetry Drawer"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleVerify(inc.incidentId || inc.id)}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow transition-colors inline-flex items-center gap-1"
-                        >
-                          <CheckCircle2 className="w-3 h-3" /> Verify
-                        </button>
-                        <button
-                          onClick={() => handleOpenRejectModal(inc)}
-                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 font-semibold text-[11px] border border-slate-700 hover:border-red-700 transition-colors inline-flex items-center gap-1"
-                        >
-                          <XCircle className="w-3 h-3" /> Reject
                         </button>
                       </td>
                     </tr>
@@ -538,41 +528,6 @@ export default function AdminCommandCenterPage() {
         onClose={() => setIsCallerModalOpen(false)}
         onIncidentCreated={loadData}
       />
-
-      {/* Reject Modal with reason */}
-      {rejectModalIncident && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-[#10182b] border border-slate-700 rounded-2xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-bold text-white">
-              Reject Incident #{rejectModalIncident.incidentId || rejectModalIncident.id}
-            </h3>
-            <p className="text-xs text-slate-400">
-              Please enter a brief rejection justification:
-            </p>
-            <input
-              type="text"
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              className="w-full bg-[#0d1629] text-white text-xs px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-red-500"
-              placeholder="e.g. Duplicate report, spam, invalid address"
-            />
-            <div className="flex justify-end gap-2 text-xs">
-              <button
-                onClick={() => setRejectModalIncident(null)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmReject}
-                className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold"
-              >
-                Confirm Rejection
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

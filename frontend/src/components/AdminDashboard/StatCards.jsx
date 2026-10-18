@@ -4,10 +4,13 @@ import { Bell, AlertTriangle, FileText, Users, Package } from 'lucide-react';
 export default function StatCards({
   totalIncidents = 24,
   criticalPriority = 8,
-  awaitingVerification = 6,
+  awaitingVerification = 0,
+  autoVerifiedCount = null,
   availableTeams = 12,
   reliefSupplies = 350,
 }) {
+  const verifiedCount = autoVerifiedCount != null ? autoVerifiedCount : Math.max(0, totalIncidents - awaitingVerification);
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
       {/* 1. Total Incidents */}
@@ -17,7 +20,7 @@ export default function StatCards({
             <Bell className="w-5 h-5" />
           </div>
           <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-            ↑ 12%
+            Active
           </span>
         </div>
         <div className="mt-3 flex items-baseline justify-between">
@@ -51,20 +54,23 @@ export default function StatCards({
         </div>
       </div>
 
-      {/* 3. Awaiting Verification */}
+      {/* 3. AI Auto-Verified */}
       <div className="bg-[#121b2f] border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between hover:border-slate-700 transition-all">
         <div className="flex items-start justify-between">
-          <div className="w-10 h-10 rounded-xl bg-blue-950/80 border border-blue-800/60 flex items-center justify-center text-blue-400">
+          <div className="w-10 h-10 rounded-xl bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-emerald-400">
             <FileText className="w-5 h-5" />
           </div>
+          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+            Automated
+          </span>
         </div>
         <div className="mt-3 flex items-baseline justify-between">
           <div>
-            <h3 className="text-2xl font-extrabold text-white tracking-tight">{awaitingVerification}</h3>
-            <p className="text-xs text-slate-400 font-medium">Awaiting Verification</p>
+            <h3 className="text-2xl font-extrabold text-white tracking-tight">{verifiedCount}</h3>
+            <p className="text-xs text-slate-400 font-medium">AI Auto-Verified</p>
           </div>
           {/* Blue Sparkline */}
-          <svg className="w-16 h-7 text-blue-400" fill="none" viewBox="0 0 60 25" stroke="currentColor">
+          <svg className="w-16 h-7 text-emerald-400" fill="none" viewBox="0 0 60 25" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M2 12 L15 16 L28 10 L42 14 L58 8" />
           </svg>
         </div>
