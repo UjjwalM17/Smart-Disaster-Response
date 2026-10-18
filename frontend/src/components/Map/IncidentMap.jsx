@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { createOfflineTileLayer } from './OfflineTileLayer';
 
 // Priority Colors
 export const PRIORITY_COLORS = {
@@ -84,9 +85,9 @@ export default function IncidentMap({
         scrollWheelZoom: true,
       }).setView(center, zoom);
 
-      // OpenStreetMap tiles — free, no API key required
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      // ResQ Offline-Aware TileLayer (IndexedDB Cache + graceful canvas fallback)
+      createOfflineTileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors | ResQ Offline Cache',
         maxZoom: 19,
       }).addTo(map);
 

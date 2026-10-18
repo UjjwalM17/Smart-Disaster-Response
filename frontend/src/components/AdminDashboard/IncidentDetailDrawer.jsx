@@ -256,7 +256,75 @@ export default function IncidentDetailDrawer({ incident, isOpen, onClose, onMiss
                     ? 'Requires immediate high-command intervention & QRF dispatch.'
                     : 'Standard regional emergency unit mobilized.'}
                 </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                    incident.syncStatus === 'SAVED_OFFLINE'
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  }`}>
+                    {incident.syncStatus === 'SAVED_OFFLINE' ? '💾 Stored in Offline Queue' : '📡 PostgreSQL Synced'}
+                  </span>
+                  {incident.clientIncidentId && (
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Ref: {incident.clientIncidentId}
+                    </span>
+                  )}
+                </div>
               </div>
+            </div>
+
+            {/* Operator Override Section */}
+            <div className="pt-2 border-t border-slate-800/80">
+              <button
+                type="button"
+                onClick={() => setShowOverride(!showOverride)}
+                className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1"
+              >
+                <span>⚙️ Commander Priority Override & Audit</span>
+              </button>
+
+              {showOverride && (
+                <div className="mt-2.5 p-3 rounded-xl bg-slate-900/90 border border-amber-500/30 space-y-2 text-xs animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-200">New Score (0-100):</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={overrideScore}
+                      onChange={(e) => setOverrideScore(e.target.value)}
+                      className="w-16 px-2 py-1 rounded-lg bg-slate-800 text-white border border-slate-700 text-center font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-semibold block mb-1">
+                      Mandatory Reason for Audit Log:
+                    </label>
+                    <input
+                      type="text"
+                      value={overrideReason}
+                      onChange={(e) => setOverrideReason(e.target.value)}
+                      placeholder="e.g. Ground scout confirmed fire reached chemical tanks"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 text-white border border-slate-700 text-xs"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!overrideReason.trim()) {
+                        alert('Please enter a mandatory reason for the audit log');
+                        return;
+                      }
+                      await incidentStore.overridePriority(incident.incidentId || incident.id, overrideScore, overrideReason);
+                      setOverrideSaved(true);
+                      setTimeout(() => setOverrideSaved(false), 2000);
+                    }}
+                    className="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition"
+                  >
+                    {overrideSaved ? '✅ Override Saved to Audit Log' : 'Save Commander Override'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Four Weighted Bars ("Explain this score") */}

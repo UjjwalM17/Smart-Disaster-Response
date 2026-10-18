@@ -26,33 +26,37 @@ public class IncidentService {
 
         log.info("Inside createIncident()");
 
+        // Idempotency check for offline synchronization
+        if (request.getClientIncidentId() != null && !request.getClientIncidentId().trim().isEmpty()) {
+            java.util.Optional<Incident> existing = incidentRepository.findByClientIncidentId(request.getClientIncidentId().trim());
+            if (existing.isPresent()) {
+                log.info("Incident with clientIncidentId {} already exists. Returning existing record.", request.getClientIncidentId());
+                return mapToResponse(existing.get());
+            }
+        }
+
         Incident incident = mapToEntity(request);
 
-        incident.setStatus(IncidentStatus.REPORTED);
-        incident.setReportedTime(LocalDateTime.now());
+        if (incident.getStatus() == null) {
+            incident.setStatus(IncidentStatus.REPORTED);
+        }
+        if (incident.getReportedTime() == null) {
+            incident.setReportedTime(LocalDateTime.now());
+        }
+        incident.setSyncStatus("SYNCED");
 
         Incident savedIncident = incidentRepository.save(incident);
 
         return mapToResponse(savedIncident);
     }
 
-    // Create Multiple Incidents
+    // Create Multiple Incidents / Batch Sync
     public List<IncidentResponse> createIncidents(List<IncidentRequest> requests) {
 
         log.info("Inside createIncidents()");
 
-        List<Incident> incidents = requests.stream()
-                .map(this::mapToEntity)
-                .peek(incident -> {
-                    incident.setStatus(IncidentStatus.REPORTED);
-                    incident.setReportedTime(LocalDateTime.now());
-                })
-                .collect(Collectors.toList());
-
-        List<Incident> savedIncidents = incidentRepository.saveAll(incidents);
-
-        return savedIncidents.stream()
-                .map(this::mapToResponse)
+        return requests.stream()
+                .map(this::createIncident)
                 .collect(Collectors.toList());
     }
 
@@ -88,9 +92,47 @@ public class IncidentService {
         incident.setDisasterType(request.getDisasterType());
         incident.setSeverity(request.getSeverity());
         incident.setDescription(request.getDescription());
+        if (request.getLatitude() != null) incident.setLatitude(request.getLatitude());
+        if (request.getLongitude() != null) incident.setLongitude(request.getLongitude());
+        if (request.getImageUrl() != null) incident.setImageUrl(request.getImageUrl());
+        if (request.getPriorityScore() != null) incident.setPriorityScore(request.getPriorityScore());
+        if (request.getAiLabel() != null) incident.setAiLabel(request.getAiLabel());
+        if (request.getAiConfidence() != null) incident.setAiConfidence(request.getAiConfidence());
+        if (request.getVerified() != null) incident.setVerified(request.getVerified());
+        if (request.getPeopleAffected() != null) incident.setPeopleAffected(request.getPeopleAffected());
+        if (request.getNotes() != null) incident.setNotes(request.getNotes());
+        if (request.getDuplicateGroupId() != null) incident.setDuplicateGroupId(request.getDuplicateGroupId());
 
         Incident updatedIncident = incidentRepository.save(incident);
 
+        return mapToResponse(updatedIncident);
+    }
+
+    // Verify Incident (Admin override / confirm)
+    public IncidentResponse verifyIncident(Long id, Boolean verified, String notes) {
+        Incident incident = incidentRepository.findById(id)
+                .orElseThrow(() ->
+                        new IncidentNotFoundException("Incident not found with id : " + id));
+
+        incident.setVerified(Boolean.TRUE.equals(verified));
+        if (notes != null && !notes.trim().isEmpty()) {
+            incident.setNotes(incident.getNotes() != null ? incident.getNotes() + " | Verification: " + notes : "Verification: " + notes);
+        }
+        if (Boolean.TRUE.equals(verified) && incident.getStatus() == IncidentStatus.REPORTED) {
+            incident.setStatus(IncidentStatus.IN_PROGRESS);
+        }
+        Incident updatedIncident = incidentRepository.save(incident);
+        return mapToResponse(updatedIncident);
+    }
+
+    // Update Status
+    public IncidentResponse updateStatus(Long id, IncidentStatus status) {
+        Incident incident = incidentRepository.findById(id)
+                .orElseThrow(() ->
+                        new IncidentNotFoundException("Incident not found with id : " + id));
+
+        incident.setStatus(status);
+        Incident updatedIncident = incidentRepository.save(incident);
         return mapToResponse(updatedIncident);
     }
 
@@ -117,6 +159,18 @@ public class IncidentService {
         incident.setDisasterType(request.getDisasterType());
         incident.setSeverity(request.getSeverity());
         incident.setDescription(request.getDescription());
+        incident.setLatitude(request.getLatitude());
+        incident.setLongitude(request.getLongitude());
+        incident.setImageUrl(request.getImageUrl());
+        incident.setPriorityScore(request.getPriorityScore());
+        incident.setAiLabel(request.getAiLabel());
+        incident.setAiConfidence(request.getAiConfidence());
+        incident.setVerified(request.getVerified() != null ? request.getVerified() : false);
+        incident.setClientIncidentId(request.getClientIncidentId());
+        incident.setDuplicateGroupId(request.getDuplicateGroupId());
+        incident.setPeopleAffected(request.getPeopleAffected());
+        incident.setNotes(request.getNotes());
+        incident.setSyncStatus(request.getSyncStatus() != null ? request.getSyncStatus() : "SYNCED");
 
         return incident;
     }
@@ -134,6 +188,18 @@ public class IncidentService {
                 .description(incident.getDescription())
                 .status(incident.getStatus())
                 .reportedTime(incident.getReportedTime())
+                .latitude(incident.getLatitude())
+                .longitude(incident.getLongitude())
+                .imageUrl(incident.getImageUrl())
+                .priorityScore(incident.getPriorityScore())
+                .aiLabel(incident.getAiLabel())
+                .aiConfidence(incident.getAiConfidence())
+                .verified(incident.getVerified())
+                .clientIncidentId(incident.getClientIncidentId())
+                .duplicateGroupId(incident.getDuplicateGroupId())
+                .peopleAffected(incident.getPeopleAffected())
+                .notes(incident.getNotes())
+                .syncStatus(incident.getSyncStatus())
                 .build();
     }
 }

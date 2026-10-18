@@ -927,40 +927,73 @@ function saveStoredIncidents(incidents) {
 
 export const incidentStore = {
   /**
-   * Get all incidents, blending backend records with local rich metadata
+   * Get all incidents, combining real PostgreSQL backend records with local offline queue
    */
   async getAllIncidents() {
-    let localList = getStoredIncidents();
+    let combinedList = [];
 
+    // 1. Fetch real incidents from PostgreSQL via Gateway port 8086
     try {
       const backendList = await api.getIncidents();
       if (Array.isArray(backendList) && backendList.length > 0) {
-        // Merge: only update status for incidents that already exist locally.
-        // We do NOT create new phantom entries from raw backend records that
-        // lack rich metadata (images, coordinates, AI labels). Incidents
-        // created through the citizen form are added to local store at
-        // creation time via createIncident(), so they already exist here.
-        const localMap = new Map(localList.map((inc) => [String(inc.incidentId || inc.id), inc]));
+        combinedList = backendList.map((inc) => {
+          const isVerified = Boolean(inc.verified);
+          const hasDispatched = inc.status === 'IN_PROGRESS' || inc.status === 'COMPLETED';
 
-        backendList.forEach((bInc) => {
-          const key = String(bInc.incidentId);
-          if (localMap.has(key)) {
-            // Update status if changed on backend
-            localMap.get(key).status = bInc.status || localMap.get(key).status;
-          }
-          // Skip unknown backend-only records — they would appear as
-          // identical filler rows ("FLOOD / 90% / CRITICAL 78") without
-          // real photos or coordinates.
+          return {
+            ...inc,
+            id: inc.incidentId,
+            verificationStatus: isVerified ? 'VERIFIED' : 'PENDING',
+            syncStatus: inc.syncStatus || 'SYNCED',
+            timeline: [
+              { stage: 'Received', time: 'Received', done: true },
+              { stage: 'Under verification', time: 'In progress', done: true },
+              { stage: 'Verified', time: isVerified ? 'Verified' : 'Pending', done: isVerified },
+              { stage: 'Response dispatched', time: hasDispatched ? 'Dispatched' : 'Pending', done: hasDispatched },
+            ],
+          };
         });
-
-        localList = Array.from(localMap.values());
-        saveStoredIncidents(localList);
+        saveStoredIncidents(combinedList);
       }
     } catch (err) {
-      console.warn('Backend /api/incidents unavailable, using local store:', err.message);
+      console.warn('Backend /api/incidents unavailable, checking local storage:', err.message);
+      combinedList = getStoredIncidents();
     }
 
-    return localList;
+    // 2. Fetch pending offline reports from IndexedDB
+    try {
+      const { offlineDb, SYNC_STATUS } = await import('./offlineDb');
+      const localOffline = await offlineDb.getAllLocalIncidents();
+      const serverClientIds = new Set(combinedList.map((i) => i.clientIncidentId).filter(Boolean));
+
+      // Append offline items that have not yet reached server
+      const pendingLocal = localOffline.filter(
+        (loc) => loc.syncStatus !== SYNC_STATUS.SYNCED && !serverClientIds.has(loc.clientIncidentId)
+      );
+
+      for (const loc of pendingLocal) {
+        combinedList.unshift({
+          ...loc,
+          incidentId: loc.clientIncidentId,
+          id: loc.clientIncidentId,
+          isOfflineDraft: true,
+          timeline: [
+            { stage: 'Saved Offline', time: 'Locally Stored', done: true },
+            { stage: 'Pending Sync', time: 'In Queue', done: true },
+            { stage: 'Transmitted to Ops', time: 'Pending Reconnect', done: false },
+            { stage: 'Dispatched', time: 'Pending Verification', done: false },
+          ],
+        });
+      }
+    } catch (idbErr) {
+      console.warn('IndexedDB offline fetch warning:', idbErr);
+    }
+
+    if (combinedList.length === 0) {
+      combinedList = getStoredIncidents();
+    }
+
+    return combinedList;
   },
 
   /**
@@ -969,131 +1002,133 @@ export const incidentStore = {
   async getIncidentById(id) {
     const list = await this.getAllIncidents();
     const strId = String(id).replace('#', '').trim();
-    return list.find((inc) => String(inc.incidentId) === strId || String(inc.id) === strId);
+    return list.find((inc) => String(inc.incidentId) === strId || String(inc.id) === strId || String(inc.clientIncidentId) === strId);
   },
 
   /**
-   * Create an incident from Citizen Report or Admin caller form
+   * Create an incident from Citizen Report with Offline-First IndexedDB durability
    */
-  async createIncident(formData) {
-    let backendId = null;
+  async createIncident(formData, mediaBlob = null) {
+    const { offlineDb, SYNC_STATUS } = await import('./offlineDb');
+    const { syncEngine } = await import('./syncEngine');
 
-    // Map severity to Spring Boot enum: LOW, MEDIUM, HIGH (backend does not have CRITICAL in Severity enum)
+    // Generate unique idempotency key
+    const clientIncidentId = formData.clientIncidentId || `RESQ-CLI-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
+    // Map severity enum for Spring Boot: LOW, MEDIUM, HIGH
     let severityEnum = 'HIGH';
-    const prio = formData.priorityScore || 80;
+    const prio = formData.priorityScore || 75;
     if (prio >= 60) severityEnum = 'HIGH';
     else if (prio >= 30) severityEnum = 'MEDIUM';
     else severityEnum = 'LOW';
 
-    // 1. Submit to Backend /api/incidents
-    try {
-      const backendPayload = {
-        reporterName: formData.reporterName || 'Citizen Reporter',
-        mobile: formData.contactPhone && /^[6-9]\d{9}$/.test(formData.contactPhone)
-          ? formData.contactPhone
-          : '9876543210',
-        location: formData.location || 'New Delhi NCR',
-        disasterType: formData.aiLabel || formData.disasterType || 'Flood',
-        severity: severityEnum,
-        description: formData.description || 'Emergency disaster reported.',
-      };
-
-      const backendResp = await api.createIncident(backendPayload);
-      if (backendResp && (backendResp.incidentId || backendResp.id)) {
-        backendId = backendResp.incidentId || backendResp.id;
-      }
-    } catch (err) {
-      console.warn('Backend incident creation error, saving locally:', err.message);
-    }
-
-    // 2. Generate local ID if backend didn't return one
-    const localList = getStoredIncidents();
-    const nextId = backendId || Math.max(105, ...localList.map((i) => Number(i.incidentId || i.id) || 0)) + 1;
-
-    const newIncident = {
-      incidentId: nextId,
-      id: nextId,
+    const incidentRecord = {
+      clientIncidentId,
       reporterName: formData.reporterName || 'Citizen Reporter',
-      mobile: formData.contactPhone || '9876543210',
-      location: formData.location || 'New Delhi NCR',
-      latitude: formData.latitude || 28.6139,
-      longitude: formData.longitude || 77.2090,
-      disasterType: formData.aiLabel || 'Flood',
+      mobile: formData.contactPhone && /^[6-9]\d{9}$/.test(formData.contactPhone)
+        ? formData.contactPhone
+        : '9876543210',
+      location: formData.location || 'Reported Location',
+      latitude: formData.latitude || null,
+      longitude: formData.longitude || null,
+      disasterType: formData.aiLabel || formData.disasterType || 'Flood',
       aiLabel: formData.aiLabel || 'Flood',
-      aiConfidence: formData.aiConfidence || 92,
+      aiConfidence: formData.aiConfidence || 85,
       severity: severityEnum,
-      priorityScore: formData.priorityScore || 85,
-      peopleAffected: formData.peopleAffected ? Number(formData.peopleAffected) : 25,
-      description: formData.description || '',
+      priorityScore: formData.priorityScore || prio,
+      peopleAffected: formData.peopleAffected ? Number(formData.peopleAffected) : 20,
+      description: formData.description || 'Disaster incident reported.',
       notes: formData.notes || '',
       imageUrl: formData.imageUrl || getDisasterImage(formData.aiLabel || 'Flood'),
       status: 'REPORTED',
       verified: false,
       verificationStatus: 'PENDING',
-      reportedBy: formData.reportedBy || 'Citizen Web',
+      reportedBy: formData.reportedBy || 'Citizen PWA',
       reportedTime: new Date().toISOString(),
-      timeline: [
-        { stage: 'Received', time: 'Just now', done: true },
-        { stage: 'Under verification', time: 'In progress', done: true },
-        { stage: 'Verified', time: 'Pending', done: false },
-        { stage: 'Response dispatched', time: 'Pending', done: false },
-      ],
+      syncStatus: SYNC_STATUS.SAVED_OFFLINE,
+      gpsAccuracy: formData.gpsAccuracy || null,
     };
 
-    localList.unshift(newIncident);
-    saveStoredIncidents(localList);
+    // 1. Durably save in IndexedDB first
+    await offlineDb.saveIncident(incidentRecord, mediaBlob);
+    await offlineDb.logAudit('OFFLINE_REPORT_CREATED', incidentRecord.reporterName, { clientIncidentId });
 
-    return newIncident;
+    // 2. If online, attempt immediate sync via Gateway
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        const backendResp = await api.createIncident({
+          ...incidentRecord,
+          syncStatus: 'SYNCED',
+        });
+
+        if (backendResp && backendResp.incidentId) {
+          incidentRecord.incidentId = backendResp.incidentId;
+          incidentRecord.id = backendResp.incidentId;
+          incidentRecord.syncStatus = SYNC_STATUS.SYNCED;
+
+          await offlineDb.updateIncidentStatus(clientIncidentId, SYNC_STATUS.SYNCED, {
+            serverIncidentId: backendResp.incidentId,
+          });
+        }
+      } catch (err) {
+        console.warn('Network sync interrupted; report safely stored offline in IndexedDB:', err.message);
+      }
+    }
+
+    return incidentRecord;
   },
 
   /**
    * Verify an incident in the Verification Queue
-   * Calls PATCH /api/incidents/{id}/verify or fallback status update
    */
-  async verifyIncident(id) {
+  async verifyIncident(id, verified = true, notes = '') {
     const strId = String(id);
+    let updated = null;
+
+    try {
+      updated = await api.verifyIncident(id, verified, notes);
+    } catch (e) {
+      console.warn('Backend verify API fallback to local:', e.message);
+    }
+
     const localList = getStoredIncidents();
     const incident = localList.find((inc) => String(inc.incidentId) === strId || String(inc.id) === strId);
-
     if (incident) {
-      incident.verified = true;
-      incident.verificationStatus = 'VERIFIED';
-      incident.status = 'IN_PROGRESS';
-      if (incident.timeline && incident.timeline[2]) {
-        incident.timeline[2].done = true;
-        incident.timeline[2].time = 'Just now';
-      }
+      incident.verified = verified;
+      incident.verificationStatus = verified ? 'VERIFIED' : 'REJECTED';
+      if (verified) incident.status = 'IN_PROGRESS';
       saveStoredIncidents(localList);
-
-      // Attempt backend PATCH/PUT
-      try {
-        await fetch(`/api/incidents/${incident.incidentId}/verify`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-        });
-      } catch (e) {
-        // Backend optional route
-      }
     }
-    return incident;
+
+    const { offlineDb } = await import('./offlineDb');
+    await offlineDb.logAudit(verified ? 'INCIDENT_VERIFIED' : 'INCIDENT_REJECTED', 'Operations Officer', { incidentId: id, notes });
+
+    return updated || incident;
   },
 
   /**
    * Reject an incident in the Verification Queue
    */
   async rejectIncident(id, reason = 'Duplicate or unverified submission') {
-    const strId = String(id);
-    const localList = getStoredIncidents();
-    const incident = localList.find((inc) => String(inc.incidentId) === strId || String(inc.id) === strId);
+    return this.verifyIncident(id, false, reason);
+  },
 
-    if (incident) {
-      incident.verified = false;
-      incident.verificationStatus = 'REJECTED';
-      incident.status = 'COMPLETED';
-      incident.rejectReason = reason;
+  /**
+   * Override priority with operator audit log
+   */
+  async overridePriority(id, newScore, reason = 'Manual Commander Override') {
+    const { offlineDb } = await import('./offlineDb');
+    await offlineDb.logAudit('PRIORITY_OVERRIDE', 'Commander', { incidentId: id, newScore, reason });
+
+    const localList = getStoredIncidents();
+    const inc = localList.find((i) => String(i.incidentId) === String(id) || String(i.id) === String(id));
+    if (inc) {
+      inc.priorityScore = Number(newScore);
+      inc.priorityLevel = newScore >= 80 ? 'CRITICAL' : newScore >= 60 ? 'HIGH' : 'MEDIUM';
+      inc.notes = inc.notes ? `${inc.notes} | Override: ${reason}` : `Override: ${reason}`;
       saveStoredIncidents(localList);
     }
-    return incident;
+    return inc;
   },
 
   /**
@@ -1101,9 +1136,14 @@ export const incidentStore = {
    */
   async markDispatched(id, missionId = null) {
     const strId = String(id);
+    try {
+      await api.updateIncidentStatus(id, 'IN_PROGRESS');
+    } catch (e) {
+      // offline fallback
+    }
+
     const localList = getStoredIncidents();
     const incident = localList.find((inc) => String(inc.incidentId) === strId || String(inc.id) === strId);
-
     if (incident) {
       incident.status = 'IN_PROGRESS';
       if (incident.timeline && incident.timeline[3]) {

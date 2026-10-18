@@ -44,4 +44,32 @@ public class Incident {
 
     private LocalDateTime reportedTime;
 
+    private Double latitude;
+
+    private Double longitude;
+
+    @Column(columnDefinition = "TEXT")
+    private String imageUrl;
+
+    private Double priorityScore;
+
+    private String aiLabel;
+
+    private Double aiConfidence;
+
+    @Builder.Default
+    private Boolean verified = false;
+
+    @Column(unique = true)
+    private String clientIncidentId;
+
+    private String duplicateGroupId;
+
+    private Integer peopleAffected;
+
+    @Column(columnDefinition = "TEXT")
+    private String notes;
+
+    private String syncStatus;
+
 }

@@ -12,8 +12,11 @@ import {
   X, 
   Bell, 
   CheckSquare, 
-  Square 
+  Square,
+  Sparkles,
+  ShieldCheck 
 } from 'lucide-react';
+import { dispatchEngine } from '../services/dispatchEngine';
 
 export default function MissionDispatchTab({
   missions = [],
@@ -35,6 +38,7 @@ export default function MissionDispatchTab({
   const [selectedResources, setSelectedResources] = useState([]);
   const [priority, setPriority] = useState('HIGH');
   const [remarks, setRemarks] = useState('');
+  const [recommendation, setRecommendation] = useState(null);
 
   const availableTeams = teams.filter((t) => t.availabilityStatus === 'AVAILABLE');
   const availableResources = resources.filter((r) => r.availabilityStatus === 'AVAILABLE');
@@ -276,7 +280,22 @@ export default function MissionDispatchTab({
                 ) : (
                   <select
                     value={selectedIncident}
-                    onChange={(e) => setSelectedIncident(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedIncident(val);
+                      const inc = incidents.find((i) => String(i.incidentId) === String(val));
+                      if (inc) {
+                        const rec = dispatchEngine.recommendDispatch({
+                          incident: inc,
+                          availableTeams,
+                          availableResources,
+                        });
+                        setRecommendation(rec);
+                        setPriority((inc.priorityScore && inc.priorityScore >= 80) ? 'CRITICAL' : 'HIGH');
+                      } else {
+                        setRecommendation(null);
+                      }
+                    }}
                     required
                     className="w-full p-2.5 bg-slate-950 text-white rounded-lg border border-slate-800 focus:outline-none focus:border-amber-500 text-xs"
                   >
@@ -289,6 +308,43 @@ export default function MissionDispatchTab({
                   </select>
                 )}
               </div>
+
+              {/* AI Dispatch Recommendation Card */}
+              {recommendation && (
+                <div className="p-3 bg-[#0d1629] rounded-xl border border-blue-500/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      Automated Policy Recommendation
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (recommendation.recommendedTeamIds?.length > 0) {
+                          setSelectedTeams(recommendation.recommendedTeamIds);
+                        }
+                        if (recommendation.recommendedResourceIds?.length > 0) {
+                          setSelectedResources(recommendation.recommendedResourceIds);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold shadow"
+                    >
+                      Apply Allocation
+                    </button>
+                  </div>
+                  <ul className="text-[11px] text-slate-300 space-y-0.5 list-disc list-inside">
+                    {recommendation.rationale.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                  {recommendation.requiresHumanConfirmation && (
+                    <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-800/40 text-[10px] text-amber-300 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>Safety Rule: Critical priority incident requires manual Operations Commander confirmation.</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Step 2: Rescue Teams Selection */}
               <div className="space-y-1">

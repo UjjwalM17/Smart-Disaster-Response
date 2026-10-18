@@ -3,53 +3,43 @@ import { ArrowUpRight, CheckCircle, Check, X } from 'lucide-react';
 import { getDisasterImage } from '../../utils/disasterAssets';
 import IncidentImage from '../common/IncidentImage';
 
-export default function VerificationQueueTable({ onViewAll, onVerify, onReject }) {
-  const [queue, setQueue] = useState([
-    {
-      id: '#INC-006',
-      image: getDisasterImage('Flood'),
-      assessment: 'Flood (Severe)',
-      confidence: 'Confidence: 90%',
-      priorityScore: 87,
-    },
-    {
-      id: '#INC-007',
-      image: getDisasterImage('Fire'),
-      assessment: 'Fire (High)',
-      confidence: 'Confidence: 85%',
-      priorityScore: 76,
-    },
-    {
-      id: '#INC-008',
-      image: getDisasterImage('Building Collapse'),
-      assessment: 'Building Collapse (Moderate)',
-      confidence: 'Confidence: 78%',
-      priorityScore: 68,
-    },
-    {
-      id: '#INC-009',
-      image: getDisasterImage('Flood'),
-      assessment: 'Flood (Moderate)',
-      confidence: 'Confidence: 80%',
-      priorityScore: 62,
-    },
-    {
-      id: '#INC-010',
-      image: getDisasterImage('Fire'),
-      assessment: 'Fire (High)',
-      confidence: 'Confidence: 82%',
-      priorityScore: 71,
-    },
-  ]);
+import { incidentStore } from '../../services/incidentStore';
 
-  const handleVerifyItem = (id) => {
-    setQueue((prev) => prev.filter((item) => item.id !== id));
-    if (onVerify) onVerify(id);
+export default function VerificationQueueTable({ incidents = [], onViewAll, onVerify, onReject }) {
+  // Derive unverified incidents from real database list
+  const pendingFromProps = (incidents || [])
+    .filter((inc) => !inc.verified)
+    .map((inc) => ({
+      id: `#INC-${String(inc.incidentId || inc.id).padStart(3, '0')}`,
+      rawId: inc.incidentId || inc.id,
+      image: inc.imageUrl || getDisasterImage(inc.disasterType || 'Flood'),
+      assessment: `${inc.disasterType || inc.aiLabel || 'Flood'} (${inc.severity || 'HIGH'})`,
+      confidence: `Confidence: ${inc.aiConfidence || 85}%`,
+      priorityScore: inc.priorityScore || 70,
+    }));
+
+  const [localDismissed, setLocalDismissed] = useState(new Set());
+
+  const queue = pendingFromProps.filter((item) => !localDismissed.has(item.rawId));
+
+  const handleVerifyItem = async (rawId) => {
+    setLocalDismissed((prev) => new Set([...prev, rawId]));
+    try {
+      await incidentStore.verifyIncident(rawId, true, 'Verified from Operations Verification Queue');
+    } catch (e) {
+      console.warn('Verify error:', e);
+    }
+    if (onVerify) onVerify(rawId);
   };
 
-  const handleRejectItem = (id) => {
-    setQueue((prev) => prev.filter((item) => item.id !== id));
-    if (onReject) onReject(id);
+  const handleRejectItem = async (rawId) => {
+    setLocalDismissed((prev) => new Set([...prev, rawId]));
+    try {
+      await incidentStore.rejectIncident(rawId, 'Rejected from Operations Verification Queue');
+    } catch (e) {
+      console.warn('Reject error:', e);
+    }
+    if (onReject) onReject(rawId);
   };
 
   return (

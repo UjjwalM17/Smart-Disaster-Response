@@ -35,6 +35,24 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }).then(handleResponse),
+  verifyIncident: (id, verified = true, notes = '') =>
+    fetch(`${BASE_URL}/incidents/${id}/verify`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ verified, notes }),
+    }).then(handleResponse),
+  updateIncidentStatus: (id, status) =>
+    fetch(`${BASE_URL}/incidents/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    }).then(handleResponse),
+  syncIncidentsBatch: (reports) =>
+    fetch(`${BASE_URL}/incidents/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reports),
+    }).then(handleResponse),
   deleteIncident: (id) =>
     fetch(`${BASE_URL}/incidents/${id}`, { method: 'DELETE' }).then(handleResponse),
 

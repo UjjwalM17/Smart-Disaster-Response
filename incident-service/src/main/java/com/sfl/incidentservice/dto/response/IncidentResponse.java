@@ -29,4 +29,28 @@ public class IncidentResponse {
 
     private LocalDateTime reportedTime;
 
+    private Double latitude;
+
+    private Double longitude;
+
+    private String imageUrl;
+
+    private Double priorityScore;
+
+    private String aiLabel;
+
+    private Double aiConfidence;
+
+    private Boolean verified;
+
+    private String clientIncidentId;
+
+    private String duplicateGroupId;
+
+    private Integer peopleAffected;
+
+    private String notes;
+
+    private String syncStatus;
+
 }

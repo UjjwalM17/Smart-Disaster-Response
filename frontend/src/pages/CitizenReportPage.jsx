@@ -17,16 +17,34 @@ import {
 } from 'lucide-react';
 import CitizenHeader from '../components/Citizen/CitizenHeader';
 import LocationPickerMap from '../components/Map/LocationPickerMap';
-import { analyzeIncident } from '../lib/ai';
+import OfflineMapDownloader from '../components/Map/OfflineMapDownloader';
+import { aiPipeline } from '../services/aiPipeline';
+import { priorityEngine } from '../services/priorityEngine';
 import { incidentStore } from '../services/incidentStore';
 
 const RATE_LIMIT_SECONDS = 30;
 const RATE_LIMIT_KEY = 'resq_last_report_time';
 
+const HAZARD_CATEGORIES = [
+  'Flood',
+  'Fire',
+  'Wildfire',
+  'Building Collapse',
+  'Landslide',
+  'Earthquake',
+  'Cyclone',
+  'Other',
+];
+
 export default function CitizenReportPage() {
   const navigate = useNavigate();
 
+  // Network State
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [showMapDownloader, setShowMapDownloader] = useState(false);
+
   // Form Fields
+  const [selectedCategory, setSelectedCategory] = useState('Flood');
   const [description, setDescription] = useState('');
   const [peopleAffected, setPeopleAffected] = useState('');
   const [notes, setNotes] = useState('');
@@ -34,7 +52,12 @@ export default function CitizenReportPage() {
   const [locationAddress, setLocationAddress] = useState('Central District, New Delhi');
   const [latitude, setLatitude] = useState(28.6139);
   const [longitude, setLongitude] = useState(77.2090);
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const [locating, setLocating] = useState(false);
+
+  // AI Structured Analysis State
+  const [aiAnalysisResult, setAiAnalysisResult] = useState(null);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
 
   // Photo State
   const [imageFile, setImageFile] = useState(null);
@@ -51,8 +74,13 @@ export default function CitizenReportPage() {
   const [submitStep, setSubmitStep] = useState(null);
   const [submitError, setSubmitError] = useState('');
 
-  // Check Rate Limit on mount and tick
+  // Network and Geolocation Listeners
   useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     const checkCooldown = () => {
       const lastTime = parseInt(localStorage.getItem(RATE_LIMIT_KEY) || '0', 10);
       const elapsed = (Date.now() - lastTime) / 1000;
@@ -65,45 +93,51 @@ export default function CitizenReportPage() {
 
     checkCooldown();
     const interval = setInterval(checkCooldown, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
-  // Auto-detect GPS location on page load
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    setLocating(true);
-    setLocationAddress('📡 Detecting your location...');
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        setLatitude(lat);
-        setLongitude(lng);
-        setLocating(false);
-        setLocationAddress(`GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-        // Reverse geocode to real address
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-            { headers: { 'Accept-Language': 'en' } }
-          );
-          if (res.ok) {
-            const data = await res.json();
-            if (data.display_name) setLocationAddress(data.display_name);
+    // Auto-detect GPS coordinates
+    if (navigator.geolocation) {
+      setLocating(true);
+      setLocationAddress('📡 Acquiring satellite GPS fix...');
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+          setLatitude(lat);
+          setLongitude(lng);
+          setGpsAccuracy(accuracy ? Math.round(accuracy) : null);
+          setLocating(false);
+          setLocationAddress(`GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+
+          if (navigator.onLine) {
+            try {
+              const res = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+                { headers: { 'Accept-Language': 'en' } }
+              );
+              if (res.ok) {
+                const data = await res.json();
+                if (data.display_name) setLocationAddress(data.display_name);
+              }
+            } catch {
+              // keep coordinates string
+            }
           }
-        } catch {
-          // keep the coordinates string if geocoding fails
-        }
-      },
-      () => {
-        // Permission denied or unavailable — fall back silently
-        setLocating(false);
-        setLocationAddress('Central District, New Delhi');
-      },
-      { timeout: 10000, enableHighAccuracy: true }
-    );
+        },
+        () => {
+          setLocating(false);
+          setLocationAddress('Central District, New Delhi (Manual)');
+        },
+        { timeout: 8000, enableHighAccuracy: true }
+      );
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(interval);
+    };
   }, []);
 
-  // ─── Pure-JS EXIF GPS extractor (no library needed) ───────────────────────
+  // Pure-JS EXIF GPS extractor
   const extractExifGps = (file) =>
     new Promise((resolve) => {
       const reader = new FileReader();
@@ -111,16 +145,13 @@ export default function CitizenReportPage() {
         try {
           const buf = reader.result;
           const view = new DataView(buf);
-          // Must start with JPEG SOI marker 0xFFD8
           if (view.getUint16(0) !== 0xffd8) return resolve(null);
 
           let offset = 2;
           while (offset < view.byteLength - 4) {
             const marker = view.getUint16(offset);
             const segLen = view.getUint16(offset + 2);
-            // APP1 marker 0xFFE1 contains EXIF
             if (marker === 0xffe1) {
-              // Check "Exif\0\0" header
               const exifHeader = String.fromCharCode(
                 view.getUint8(offset + 4), view.getUint8(offset + 5),
                 view.getUint8(offset + 6), view.getUint8(offset + 7)
@@ -128,12 +159,11 @@ export default function CitizenReportPage() {
               if (exifHeader !== 'Exif') break;
 
               const tiffStart = offset + 10;
-              const endian = view.getUint16(tiffStart); // 0x4949 = LE, 0x4D4D = BE
+              const endian = view.getUint16(tiffStart);
               const le = endian === 0x4949;
               const getU16 = (o) => view.getUint16(tiffStart + o, le);
               const getU32 = (o) => view.getUint32(tiffStart + o, le);
 
-              // Read IFD0 entries to find GPS IFD offset (tag 0x8825)
               const ifd0Offset = getU32(4);
               const ifd0Count = getU16(ifd0Offset);
               let gpsIfdOffset = null;
@@ -148,7 +178,6 @@ export default function CitizenReportPage() {
               }
               if (gpsIfdOffset === null) return resolve(null);
 
-              // Read GPS IFD entries
               const gpsCount = getU16(gpsIfdOffset);
               const gpsData = {};
               for (let i = 0; i < gpsCount; i++) {
@@ -159,10 +188,8 @@ export default function CitizenReportPage() {
                 const valOffset = entryOffset + 8;
 
                 if (type === 2) {
-                  // ASCII string (LatRef / LonRef)
                   gpsData[tag] = String.fromCharCode(view.getUint8(tiffStart + getU32(valOffset)));
                 } else if (type === 5) {
-                  // Rational — value offset points into TIFF block
                   const rOffset = getU32(valOffset);
                   const vals = [];
                   for (let r = 0; r < count; r++) {
@@ -174,7 +201,6 @@ export default function CitizenReportPage() {
                 }
               }
 
-              // Tag 1=LatRef, 2=Lat(DMS), 3=LonRef, 4=Lon(DMS)
               if (!gpsData[2] || !gpsData[4]) return resolve(null);
               const dmsToDecimal = ([deg, min, sec]) => deg + min / 60 + sec / 3600;
               let lat = dmsToDecimal(gpsData[2]);
@@ -193,8 +219,9 @@ export default function CitizenReportPage() {
       reader.readAsArrayBuffer(file);
     });
 
-  // Reverse-geocode lat/lng → human-readable address (OpenStreetMap Nominatim)
+  // Reverse-geocode lat/lng
   const reverseGeocode = async (lat, lng) => {
+    if (!navigator.onLine) return null;
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
@@ -208,7 +235,7 @@ export default function CitizenReportPage() {
     }
   };
 
-  // Handle Photo selection (drag/drop or file/camera) — with EXIF GPS auto-detect
+  // Handle Photo selection & trigger On-Device AI Vision Analysis
   const handlePhotoSelect = async (file) => {
     setPhotoError('');
     setExifGpsDetected(false);
@@ -229,18 +256,37 @@ export default function CitizenReportPage() {
     reader.onloadend = () => setImagePreview(reader.result);
     reader.readAsDataURL(file);
 
-    // Try to extract GPS from EXIF (JPEGs from phone cameras usually have this)
+    // Extract EXIF GPS if present
     if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
       const gps = await extractExifGps(file);
       if (gps) {
         setLatitude(gps.lat);
         setLongitude(gps.lng);
         setExifGpsDetected(true);
-        // Show coords immediately, then try to resolve a real address
-        setLocationAddress(`📍 GPS from photo: ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}`);
+        setLocationAddress(`📍 GPS from photo EXIF: ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}`);
         const address = await reverseGeocode(gps.lat, gps.lng);
         if (address) setLocationAddress(address);
       }
+    }
+
+    // Run real On-Device AI Vision Analysis
+    setIsAnalyzingImage(true);
+    try {
+      const result = await aiPipeline.analyze({
+        imageFileOrBlob: file,
+        description,
+        location: locationAddress,
+        categoryHint: selectedCategory,
+        isOnline: navigator.onLine,
+      });
+      setAiAnalysisResult(result);
+      if (result.hazardCategory && HAZARD_CATEGORIES.includes(result.hazardCategory)) {
+        setSelectedCategory(result.hazardCategory);
+      }
+    } catch (err) {
+      console.warn('[ResQ] On-device AI analysis error:', err);
+    } finally {
+      setIsAnalyzingImage(false);
     }
   };
 
@@ -249,6 +295,7 @@ export default function CitizenReportPage() {
     setImagePreview(null);
     setPhotoError('');
     setExifGpsDetected(false);
+    setAiAnalysisResult(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
@@ -262,22 +309,23 @@ export default function CitizenReportPage() {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
+        const { latitude: lat, longitude: lng, accuracy } = pos.coords;
         setLatitude(lat);
         setLongitude(lng);
-        setLocationAddress(`Current GPS: ${lat.toFixed(4)}, ${lng.toFixed(4)} (Detected)`);
+        setGpsAccuracy(accuracy ? Math.round(accuracy) : null);
+        setLocationAddress(`GPS: ${lat.toFixed(4)}, ${lng.toFixed(4)} (Accuracy ±${Math.round(accuracy || 10)}m)`);
         setLocating(false);
       },
       (err) => {
         console.warn('Geolocation error:', err);
-        alert('Could not retrieve GPS coordinates. You can drag the pin on the map instead.');
+        alert('Could not retrieve GPS coordinates. You can select a location on the map instead.');
         setLocating(false);
       },
-      { timeout: 10000, enableHighAccuracy: true }
+      { timeout: 8000, enableHighAccuracy: true }
     );
   };
 
-  // Submit Flow
+  // Submit Flow with Durable Offline Support
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError('');
@@ -293,42 +341,51 @@ export default function CitizenReportPage() {
     }
 
     try {
-      // 1. Step Indicator: Uploading
-      setSubmitStep('uploading');
+      setSubmitStep(isOnline ? 'uploading' : 'saving_offline');
 
-      // 2. Step Indicator: AI analysing
-      // POST /incidents/analyze (multipart field "file") returns aiLabel and aiConfidence.
-      // If it fails, falls back to keyword mock in src/lib/ai.js
-      setSubmitStep('analyzing');
-      const aiResult = await analyzeIncident(imageFile, description, notes, peopleAffected);
-
-      // 3. Step Indicator: Submitted
-      // POST /incidents with status "PENDING" and verified false
-      const created = await incidentStore.createIncident({
-        reporterName: 'Citizen Reporter',
-        contactPhone,
-        location: locationAddress,
-        latitude,
-        longitude,
+      // 1. Multi-factor priority computation
+      const prioCalc = priorityEngine.calculatePriority({
+        disasterType: selectedCategory,
+        severity: aiAnalysisResult?.estimatedSeverity || 'HIGH',
+        peopleAffected: peopleAffected ? Number(peopleAffected) : 20,
         description,
         notes,
-        peopleAffected,
-        imageUrl: imagePreview || 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80',
-        aiLabel: aiResult.aiLabel,
-        aiConfidence: aiResult.aiConfidence,
-        priorityScore: aiResult.priorityScore,
-        reportedBy: 'Citizen Web',
+        aiConfidence: aiAnalysisResult?.confidenceScore || 80,
       });
 
-      // Record rate limit timestamp
-      localStorage.setItem(RATE_LIMIT_KEY, Date.now().toString());
+      setSubmitStep(isOnline ? 'analyzing' : 'saving_offline');
 
+      // 2. Persist locally to IndexedDB first, then synchronize if online
+      const created = await incidentStore.createIncident(
+        {
+          reporterName: 'Citizen Reporter',
+          contactPhone,
+          location: locationAddress,
+          latitude,
+          longitude,
+          gpsAccuracy,
+          disasterType: selectedCategory,
+          aiLabel: aiAnalysisResult?.hazardCategory || selectedCategory,
+          aiConfidence: aiAnalysisResult?.confidenceScore || 80,
+          severity: aiAnalysisResult?.estimatedSeverity || 'HIGH',
+          priorityScore: prioCalc.priorityScore,
+          peopleAffected: peopleAffected ? Number(peopleAffected) : 20,
+          description,
+          notes: notes ? `${notes} | ${prioCalc.reasons.join('; ')}` : prioCalc.reasons.join('; '),
+          imageUrl: imagePreview || '/images/disasters/flood.jpg',
+          reportedBy: 'Citizen PWA',
+          syncStatus: isOnline ? 'SYNCED' : 'SAVED_OFFLINE',
+        },
+        imageFile
+      );
+
+      localStorage.setItem(RATE_LIMIT_KEY, Date.now().toString());
       setSubmitStep('submitted');
 
-      // 4. Redirect to /report/success/:id showing incident ID and status timeline
+      // Redirect to success confirmation page
       setTimeout(() => {
-        navigate(`/report/success/${created.incidentId || created.id}`);
-      }, 600);
+        navigate(`/report/success/${created.incidentId || created.clientIncidentId || created.id}`);
+      }, 500);
     } catch (err) {
       console.error('Submission failed:', err);
       setSubmitStep(null);
@@ -341,6 +398,37 @@ export default function CitizenReportPage() {
       <CitizenHeader />
 
       <main className="flex-1 max-w-2xl mx-auto px-4 py-6 sm:py-10 w-full space-y-6">
+        {/* Honest Offline Notification Banner */}
+        {!isOnline && (
+          <div className="p-4 bg-amber-950/80 border border-amber-600/70 rounded-2xl text-amber-200 text-xs flex items-start gap-3 shadow-lg animate-in fade-in">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold text-white text-sm">Offline Mode Active</p>
+              <p>
+                Device is disconnected. Your report and photos will be stored locally in IndexedDB and queued for synchronization.
+              </p>
+              <p className="text-amber-300 font-semibold text-[11px]">
+                ⚠️ Important: Offline reports have NOT yet reached the emergency response center. They will automatically synchronize when connectivity returns.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Preload Regional Offline Maps Bar */}
+        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow">
+          <div className="flex items-center gap-2 text-xs text-slate-300">
+            <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">🗺️</span>
+            <span>Remote Area Operations?</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowMapDownloader(true)}
+            className="px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-semibold transition flex items-center gap-1.5"
+          >
+            <span>Preload Offline Map Region</span>
+          </button>
+        </div>
+
         {/* Header Title */}
         <div className="text-center space-y-1.5">
           <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-semibold inline-flex items-center gap-1.5">
@@ -350,7 +438,7 @@ export default function CitizenReportPage() {
             Report Disaster Incident
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
-            Provide photos and coordinates. AI triage verifies urgency to dispatch emergency rescue units.
+            Provide photos and coordinates. On-device AI triage classifies urgency to coordinate emergency rescue units.
           </p>
         </div>
 
@@ -358,23 +446,23 @@ export default function CitizenReportPage() {
         {submitStep && (
           <div className="p-4 rounded-2xl bg-[#121c33] border border-blue-800/80 shadow-2xl space-y-3 animate-in fade-in">
             <div className="flex items-center justify-between text-xs font-bold px-2">
-              <span className={`flex items-center gap-1.5 ${submitStep === 'uploading' ? 'text-blue-400 animate-pulse' : 'text-slate-400'}`}>
-                1. Uploading
+              <span className={`flex items-center gap-1.5 ${submitStep === 'uploading' || submitStep === 'saving_offline' ? 'text-blue-400 animate-pulse' : 'text-slate-400'}`}>
+                1. {isOnline ? 'Uploading' : 'Saving Locally'}
               </span>
               <span className="text-slate-600">&rarr;</span>
               <span className={`flex items-center gap-1.5 ${submitStep === 'analyzing' ? 'text-amber-400 animate-pulse' : submitStep === 'submitted' ? 'text-emerald-400' : 'text-slate-400'}`}>
-                <Sparkles className="w-3.5 h-3.5" /> 2. AI Analysing
+                <Sparkles className="w-3.5 h-3.5" /> 2. AI Analysis
               </span>
               <span className="text-slate-600">&rarr;</span>
               <span className={`flex items-center gap-1.5 ${submitStep === 'submitted' ? 'text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                <CheckCircle2 className="w-3.5 h-3.5" /> 3. Submitted
+                <CheckCircle2 className="w-3.5 h-3.5" /> 3. {isOnline ? 'Submitted' : 'Saved in IndexedDB'}
               </span>
             </div>
             <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500 rounded-full"
                 style={{
-                  width: submitStep === 'uploading' ? '35%' : submitStep === 'analyzing' ? '75%' : '100%',
+                  width: submitStep === 'uploading' || submitStep === 'saving_offline' ? '40%' : submitStep === 'analyzing' ? '75%' : '100%',
                 }}
               />
             </div>
@@ -400,6 +488,29 @@ export default function CitizenReportPage() {
               <span>{submitError}</span>
             </div>
           )}
+
+          {/* Disaster Category Selection */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-200">
+              Disaster Hazard Category <strong className="text-rose-400">*</strong>
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {HAZARD_CATEGORIES.map((cat) => (
+                <button
+                  type="button"
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-2 rounded-xl text-xs font-semibold border transition text-left ${
+                    selectedCategory === cat
+                      ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-600/30'
+                      : 'bg-[#0d1629] text-slate-300 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Photo Upload: Mobile Camera + Drag and Drop */}
           <div className="space-y-2">
@@ -480,6 +591,62 @@ export default function CitizenReportPage() {
               </div>
             )}
 
+            {isAnalyzingImage && (
+              <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/40 text-blue-300 text-xs flex items-center gap-2 animate-pulse">
+                <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                <span>Running real on-device computer vision analysis...</span>
+              </div>
+            )}
+
+            {aiAnalysisResult && (
+              <div className="p-4 rounded-2xl bg-[#0c1424] border border-blue-600/30 shadow-lg space-y-2.5 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" /> On-Device AI Assessment
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">
+                    {aiAnalysisResult.modelVersion}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">Identified Hazard</span>
+                    <span className="font-bold text-white text-sm">{aiAnalysisResult.hazardCategory}</span>
+                    <span className="text-[10px] text-emerald-400 font-semibold block">{aiAnalysisResult.confidenceScore}% Confidence</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">Estimated Severity</span>
+                    <span className={`font-bold text-sm ${
+                      aiAnalysisResult.estimatedSeverity === 'CRITICAL' ? 'text-red-400' :
+                      aiAnalysisResult.estimatedSeverity === 'HIGH' ? 'text-orange-400' : 'text-yellow-400'
+                    }`}>
+                      {aiAnalysisResult.estimatedSeverity}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block">Status: {aiAnalysisResult.analysisStatus}</span>
+                  </div>
+                </div>
+
+                {aiAnalysisResult.visualIndicators?.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Detected Visual Evidence:</span>
+                    <ul className="text-[11px] text-slate-300 space-y-0.5 list-disc list-inside">
+                      {aiAnalysisResult.visualIndicators.map((ind, idx) => (
+                        <li key={idx}>{ind}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {aiAnalysisResult.needsAdditionalEvidence && (
+                  <div className="p-2 rounded-xl bg-amber-950/40 border border-amber-800/40 text-[11px] text-amber-300 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                    <span>{aiAnalysisResult.uncertaintyNotes}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {photoError && (
               <p className="text-[11px] text-red-400 font-medium">{photoError}</p>
             )}
@@ -548,9 +715,16 @@ export default function CitizenReportPage() {
           {/* Location Section */}
           <div className="space-y-2.5 pt-1">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-blue-400" /> Disaster Location & Map Coordinates
-              </label>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-blue-400" /> Disaster Location & Map Coordinates
+                </label>
+                {gpsAccuracy && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-blue-300 border border-slate-700 font-mono">
+                    ±{gpsAccuracy}m accuracy
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={handleUseMyLocation}
@@ -628,6 +802,12 @@ export default function CitizenReportPage() {
           </p>
         </div>
       </main>
+
+      {/* Offline Regional Map Downloader Modal */}
+      <OfflineMapDownloader
+        isOpen={showMapDownloader}
+        onClose={() => setShowMapDownloader(false)}
+      />
     </div>
   );
 }

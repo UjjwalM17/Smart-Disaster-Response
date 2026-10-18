@@ -51,16 +51,35 @@ export default function ReportSuccessPage() {
             <CheckCircle2 className="w-9 h-9" />
           </div>
 
-          <div className="space-y-1.5">
-            <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold uppercase tracking-wider inline-block">
-              Report Successfully Received
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-white">
-              Incident ID #{id}
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
-              Your disaster report has been logged and queued into the real-time AI triage engine.
-            </p>
+          <div className="space-y-2">
+            {incident?.syncStatus === 'SAVED_OFFLINE' ? (
+              <div className="space-y-2">
+                <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" /> Saved Locally (Offline Queue)
+                </span>
+                <h1 className="text-2xl sm:text-3xl font-black text-white">
+                  Report ID: {incident?.clientIncidentId || id}
+                </h1>
+                <div className="p-3 bg-amber-950/60 border border-amber-700/50 rounded-xl text-amber-300 text-xs text-left space-y-1">
+                  <p className="font-bold">⚠️ Has NOT yet reached Emergency Command Center</p>
+                  <p>
+                    This report and your photos are safely encrypted in your browser's IndexedDB. The ResQ store-and-forward engine will automatically transmit this report once internet or radio mesh connectivity returns.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold uppercase tracking-wider inline-block">
+                  Transmitted to Operations Center
+                </span>
+                <h1 className="text-2xl sm:text-3xl font-black text-white">
+                  Incident ID #{incident?.incidentId || id}
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
+                  Your disaster report has been logged in PostgreSQL and dispatched to the real-time AI triage engine.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Status Timeline */}
@@ -139,6 +158,26 @@ export default function ReportSuccessPage() {
 
           {/* Action CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            {incident?.syncStatus === 'SAVED_OFFLINE' && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const { syncEngine } = await import('../services/syncEngine');
+                  const res = await syncEngine.manualSync();
+                  if (res.syncedCount > 0) {
+                    alert('Successfully synchronized report to emergency server!');
+                    const updated = await incidentStore.getIncidentById(id);
+                    setIncident(updated);
+                  } else {
+                    alert('Device appears offline or server unreachable. Report will remain queued in IndexedDB.');
+                  }
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-600/30 transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Retry Sync Now</span>
+              </button>
+            )}
             <Link
               to={`/track?id=${id}`}
               className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-colors"
