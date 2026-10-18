@@ -1,12 +1,14 @@
 import React from 'react';
 import { ArrowUpRight, Flame, ShieldAlert, Sparkles } from 'lucide-react';
+import { getDisasterImage } from '../../utils/disasterAssets';
+import IncidentImage from '../common/IncidentImage';
 
 export default function RecentIncidentsTable({ incidents = [], onViewAll }) {
   // Demo images for disaster categories
   const sampleIncidents = [
     {
       id: '#INC-001',
-      image: 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=150&q=80',
+      image: getDisasterImage('Flood'),
       category: 'Flood',
       location: 'Riverside area, several houses submerged',
       priority: 'Critical',
@@ -15,7 +17,7 @@ export default function RecentIncidentsTable({ incidents = [], onViewAll }) {
     },
     {
       id: '#INC-002',
-      image: 'https://images.unsplash.com/photo-1599818816945-81643c16223d?auto=format&fit=crop&w=150&q=80',
+      image: getDisasterImage('Fire'),
       category: 'Fire',
       location: 'Industrial warehouse fire',
       priority: 'High',
@@ -24,7 +26,7 @@ export default function RecentIncidentsTable({ incidents = [], onViewAll }) {
     },
     {
       id: '#INC-003',
-      image: 'https://images.unsplash.com/photo-1590496793929-36417d3117de?auto=format&fit=crop&w=150&q=80',
+      image: getDisasterImage('Building Collapse'),
       category: 'Building Collapse',
       location: 'Residential building partial collapse',
       priority: 'High',
@@ -33,7 +35,7 @@ export default function RecentIncidentsTable({ incidents = [], onViewAll }) {
     },
     {
       id: '#INC-004',
-      image: 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=150&q=80',
+      image: getDisasterImage('Flood'),
       category: 'Flood',
       location: 'Main road water logging',
       priority: 'Medium',
@@ -42,7 +44,7 @@ export default function RecentIncidentsTable({ incidents = [], onViewAll }) {
     },
     {
       id: '#INC-005',
-      image: 'https://images.unsplash.com/photo-1599818816945-81643c16223d?auto=format&fit=crop&w=150&q=80',
+      image: getDisasterImage('Fire'),
       category: 'Fire',
       location: 'Forest area fire',
       priority: 'Medium',
@@ -90,8 +92,9 @@ export default function RecentIncidentsTable({ incidents = [], onViewAll }) {
                 <tr key={idx} className="hover:bg-[#131d33] transition-colors group">
                   <td className="py-2.5 font-mono text-[11px] text-slate-400">{row.id || `#INC-${row.incidentId}`}</td>
                   <td className="py-2.5">
-                    <img
-                      src={row.image || 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=100&q=80'}
+                    <IncidentImage
+                      src={row.image}
+                      disasterType={row.category || row.disasterType}
                       alt="thumbnail"
                       className="w-10 h-8 rounded-lg object-cover border border-slate-700/60"
                     />

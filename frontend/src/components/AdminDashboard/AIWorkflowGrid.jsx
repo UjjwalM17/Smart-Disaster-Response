@@ -20,9 +20,11 @@ import {
   Check 
 } from 'lucide-react';
 import { huggingfaceService, SUPPORTED_MODELS, DEFAULT_MODEL } from '../../services/huggingfaceService';
+import { getDisasterImage } from '../../utils/disasterAssets';
+import IncidentImage from '../common/IncidentImage';
 
-// Default demo flood image (high quality real disaster response photo)
-const DEFAULT_FLOOD_IMAGE = 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80';
+// Default demo flood image (high quality real disaster response illustration)
+const DEFAULT_FLOOD_IMAGE = getDisasterImage('Flood');
 
 export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }) {
   // Form State
@@ -245,8 +247,9 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
 
               {/* Preview Thumbnail */}
               <div className="relative rounded-xl overflow-hidden border border-slate-700/80 bg-slate-950 min-h-[105px] group">
-                <img
+                <IncidentImage
                   src={imagePreview}
+                  disasterType="Flood"
                   alt="Incident thumbnail"
                   className="w-full h-full object-cover"
                 />
@@ -345,8 +348,9 @@ export default function AIWorkflowGrid({ onDispatchMission, onIncidentReported }
             <div className="flex items-start gap-3 pt-1">
               {/* Analyzed Image Preview */}
               <div className="w-32 h-28 rounded-xl overflow-hidden border border-slate-700/80 shrink-0 bg-slate-950">
-                <img
+                <IncidentImage
                   src={imagePreview}
+                  disasterType="Flood"
                   alt="AI Analyzed disaster"
                   className="w-full h-full object-cover"
                 />

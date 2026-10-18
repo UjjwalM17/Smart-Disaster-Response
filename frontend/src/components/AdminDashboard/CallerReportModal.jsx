@@ -3,6 +3,8 @@ import { X, PhoneCall, UploadCloud, MapPin, Sparkles, CheckCircle2, ShieldAlert 
 import LocationPickerMap from '../Map/LocationPickerMap';
 import { analyzeIncident } from '../../lib/ai';
 import { incidentStore } from '../../services/incidentStore';
+import { getDisasterImage } from '../../utils/disasterAssets';
+import IncidentImage from '../common/IncidentImage';
 
 export default function CallerReportModal({ isOpen, onClose, onIncidentCreated }) {
   const [description, setDescription] = useState('');
@@ -14,7 +16,7 @@ export default function CallerReportModal({ isOpen, onClose, onIncidentCreated }
   const [latitude, setLatitude] = useState(28.6139);
   const [longitude, setLongitude] = useState(77.2090);
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState('https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80');
+  const [imagePreview, setImagePreview] = useState(() => getDisasterImage('Flood'));
 
   const [step, setStep] = useState('form'); // 'form' | 'submitting' | 'done'
   const [stepText, setStepText] = useState('');
@@ -219,8 +221,9 @@ export default function CallerReportModal({ isOpen, onClose, onIncidentCreated }
               <div className="space-y-1">
                 <label className="text-slate-300 font-semibold">Attach Reference / Incident Image:</label>
                 <div className="flex items-center gap-3">
-                  <img
+                  <IncidentImage
                     src={imagePreview}
+                    disasterType="Flood"
                     alt="Preview"
                     className="w-16 h-16 rounded-xl object-cover border border-slate-700"
                   />

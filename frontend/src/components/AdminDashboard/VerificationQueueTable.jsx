@@ -1,39 +1,41 @@
 import React, { useState } from 'react';
 import { ArrowUpRight, CheckCircle, Check, X } from 'lucide-react';
+import { getDisasterImage } from '../../utils/disasterAssets';
+import IncidentImage from '../common/IncidentImage';
 
 export default function VerificationQueueTable({ onViewAll, onVerify, onReject }) {
   const [queue, setQueue] = useState([
     {
       id: '#INC-006',
-      image: 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=150&q=80',
+      image: getDisasterImage('Flood'),
       assessment: 'Flood (Severe)',
       confidence: 'Confidence: 90%',
       priorityScore: 87,
     },
     {
       id: '#INC-007',
-      image: 'https://images.unsplash.com/photo-1599818816945-81643c16223d?auto=format&fit=crop&w=150&q=80',
+      image: getDisasterImage('Fire'),
       assessment: 'Fire (High)',
       confidence: 'Confidence: 85%',
       priorityScore: 76,
     },
     {
       id: '#INC-008',
-      image: 'https://images.unsplash.com/photo-1590496793929-36417d3117de?auto=format&fit=crop&w=150&q=80',
+      image: getDisasterImage('Building Collapse'),
       assessment: 'Building Collapse (Moderate)',
       confidence: 'Confidence: 78%',
       priorityScore: 68,
     },
     {
       id: '#INC-009',
-      image: 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=150&q=80',
+      image: getDisasterImage('Flood'),
       assessment: 'Flood (Moderate)',
       confidence: 'Confidence: 80%',
       priorityScore: 62,
     },
     {
       id: '#INC-010',
-      image: 'https://images.unsplash.com/photo-1599818816945-81643c16223d?auto=format&fit=crop&w=150&q=80',
+      image: getDisasterImage('Fire'),
       assessment: 'Fire (High)',
       confidence: 'Confidence: 82%',
       priorityScore: 71,
@@ -89,8 +91,9 @@ export default function VerificationQueueTable({ onViewAll, onVerify, onReject }
                   <tr key={row.id} className="hover:bg-[#131d33] transition-colors group">
                     <td className="py-2.5 font-mono text-[11px] text-slate-400">{row.id}</td>
                     <td className="py-2.5">
-                      <img
+                      <IncidentImage
                         src={row.image}
+                        disasterType={row.assessment}
                         alt="queue item"
                         className="w-10 h-8 rounded-lg object-cover border border-slate-700/60"
                       />

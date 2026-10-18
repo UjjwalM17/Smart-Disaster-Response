@@ -13,6 +13,7 @@ import {
 import { incidentStore } from '../../services/incidentStore';
 import { getPriorityColor, getPriorityLabel } from '../../components/Map/IncidentMap';
 import IncidentDetailDrawer from '../../components/AdminDashboard/IncidentDetailDrawer';
+import IncidentImage from '../../components/common/IncidentImage';
 
 export default function AdminIncidentsPage() {
   const [incidents, setIncidents] = useState([]);
@@ -129,9 +130,10 @@ export default function AdminIncidentsPage() {
                       #{inc.incidentId || inc.id}
                     </td>
                     <td className="py-3 px-4">
-                      <img
-                        src={inc.imageUrl || 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80'}
-                        alt="Thumbnail"
+                      <IncidentImage
+                        src={inc.imageUrl}
+                        disasterType={inc.aiLabel || inc.disasterType}
+                        alt={inc.aiLabel || inc.disasterType || 'Thumbnail'}
                         className="w-12 h-9 object-cover rounded-lg border border-slate-700 cursor-pointer"
                         onClick={() => {
                           setSelectedIncident(inc);

@@ -54,14 +54,10 @@ export default function LocationPickerMap({
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      const basemapKey = import.meta.env.VITE_BASEMAP_KEY || 'cb1_4nhl_1_64952bce502d32dff4977e54';
-      const tileUrl = basemapKey
-        ? `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${basemapKey}`
-        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-
-      L.tileLayer(tileUrl, {
+      // OpenStreetMap tiles — free, no API key required
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
-        subdomains: 'abcd',
       }).addTo(map);
 
       const marker = L.marker([currentLat, currentLng], {

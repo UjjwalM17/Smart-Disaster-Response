@@ -19,6 +19,7 @@ import StatCards from '../../components/AdminDashboard/StatCards';
 import IncidentMap, { getPriorityColor, getPriorityLabel } from '../../components/Map/IncidentMap';
 import IncidentDetailDrawer from '../../components/AdminDashboard/IncidentDetailDrawer';
 import CallerReportModal from '../../components/AdminDashboard/CallerReportModal';
+import IncidentImage from '../../components/common/IncidentImage';
 import { incidentStore } from '../../services/incidentStore';
 import { api } from '../../services/api';
 
@@ -387,9 +388,10 @@ export default function AdminCommandCenterPage() {
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <img
-                          src={inc.imageUrl || 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80'}
-                          alt="Thumb"
+                        <IncidentImage
+                          src={inc.imageUrl}
+                          disasterType={inc.aiLabel || inc.disasterType}
+                          alt={inc.aiLabel || inc.disasterType || 'Thumb'}
                           className="w-14 h-10 object-cover rounded-lg border border-slate-700 cursor-pointer hover:scale-105 transition-transform"
                           onClick={() => handleOpenDrawer(inc)}
                         />

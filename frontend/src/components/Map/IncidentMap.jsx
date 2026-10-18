@@ -84,16 +84,10 @@ export default function IncidentMap({
         scrollWheelZoom: true,
       }).setView(center, zoom);
 
-      // Dark theme map tiles for Command Center (CARTO Voyager with API key)
-      const basemapKey = import.meta.env.VITE_BASEMAP_KEY || 'cb1_4nhl_1_64952bce502d32dff4977e54';
-      const tileUrl = basemapKey
-        ? `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${basemapKey}`
-        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-
-      L.tileLayer(tileUrl, {
-        attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      // OpenStreetMap tiles — free, no API key required
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
-        subdomains: 'abcd',
       }).addTo(map);
 
       markersLayerRef.current = L.layerGroup().addTo(map);

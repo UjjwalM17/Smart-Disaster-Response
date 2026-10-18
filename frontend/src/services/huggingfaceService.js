@@ -100,9 +100,13 @@ export const huggingfaceService = {
           const res = await fetch(imageInput);
           binaryPayload = await res.blob();
         } else if (typeof imageInput === 'string' && (imageInput.startsWith('http://') || imageInput.startsWith('https://'))) {
-          // Remote image URL
-          const res = await fetch(imageInput);
-          binaryPayload = await res.blob();
+          // Remote image URL - safely fetch if CORS permits
+          try {
+            const res = await fetch(imageInput);
+            if (res.ok) binaryPayload = await res.blob();
+          } catch {
+            // CORS or network failure on remote image; proceed to keyword mock gracefully
+          }
         }
 
         if (binaryPayload) {

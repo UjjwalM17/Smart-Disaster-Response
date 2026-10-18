@@ -5,6 +5,7 @@
  */
 
 import { api } from './api';
+import { getDisasterImage } from '../utils/disasterAssets';
 
 const LOCAL_STORAGE_KEY = 'resq_rich_incidents';
 
@@ -26,7 +27,7 @@ const INITIAL_INCIDENTS = [
     peopleAffected: 65,
     description: 'Residential streets submerged under 4 feet of rainwater. Multiple senior citizens trapped on ground floor.',
     notes: 'Power grid cut off in block B.',
-    imageUrl: 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80',
+    imageUrl: getDisasterImage('Flood'),
     status: 'IN_PROGRESS',
     verified: true,
     verificationStatus: 'VERIFIED',
@@ -55,7 +56,7 @@ const INITIAL_INCIDENTS = [
     peopleAffected: 120,
     description: 'Four-story commercial complex structural collapse following foundation waterlogging. Sounds of people trapped in basement.',
     notes: 'Gas smell reported nearby.',
-    imageUrl: 'https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=600&q=80',
+    imageUrl: getDisasterImage('Building Collapse'),
     status: 'REPORTED',
     verified: false,
     verificationStatus: 'PENDING',
@@ -84,7 +85,7 @@ const INITIAL_INCIDENTS = [
     peopleAffected: 80,
     description: 'Yamuna river water breach reaching temporary shelter colonies. Urgent evacuation boats required.',
     notes: 'Road connectivity severed.',
-    imageUrl: 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?auto=format&fit=crop&w=600&q=80',
+    imageUrl: getDisasterImage('Flood'),
     status: 'REPORTED',
     verified: false,
     verificationStatus: 'PENDING',
@@ -113,7 +114,7 @@ const INITIAL_INCIDENTS = [
     peopleAffected: 45,
     description: 'Chemical warehouse fire spreading towards adjacent garment packaging units. Thick toxic black smoke plume.',
     notes: 'Chemical drums exploding.',
-    imageUrl: 'https://images.unsplash.com/photo-1602980085566-4c9103848b88?auto=format&fit=crop&w=600&q=80',
+    imageUrl: getDisasterImage('Fire'),
     status: 'REPORTED',
     verified: false,
     verificationStatus: 'PENDING',
@@ -142,7 +143,7 @@ const INITIAL_INCIDENTS = [
     peopleAffected: 15,
     description: 'Soil erosion and fallen retaining wall blocking 2 lanes of vehicular traffic. No human casualties observed.',
     notes: 'Traffic diversion required.',
-    imageUrl: 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80',
+    imageUrl: getDisasterImage('Landslide'),
     status: 'COMPLETED',
     verified: true,
     verificationStatus: 'VERIFIED',
@@ -160,11 +161,33 @@ const INITIAL_INCIDENTS = [
 function getStoredIncidents() {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    let list;
     if (!raw) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_INCIDENTS));
-      return INITIAL_INCIDENTS;
+      list = INITIAL_INCIDENTS;
+    } else {
+      list = JSON.parse(raw);
     }
-    return JSON.parse(raw);
+
+    // Auto-migrate stale URLs: Unsplash (broken CORS) or old SVG data URIs → local photo paths
+    let modified = false;
+    const cleanList = list.map((inc) => {
+      const needsMigration = !inc.imageUrl ||
+        (typeof inc.imageUrl === 'string' && inc.imageUrl.includes('unsplash.com')) ||
+        (typeof inc.imageUrl === 'string' && inc.imageUrl.startsWith('data:image/svg'));
+      if (needsMigration) {
+        modified = true;
+        return {
+          ...inc,
+          imageUrl: getDisasterImage(inc.disasterType || inc.aiLabel || 'Flood'),
+        };
+      }
+      return inc;
+    });
+
+    if (modified || !raw) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleanList));
+    }
+    return cleanList;
   } catch {
     return INITIAL_INCIDENTS;
   }
@@ -213,7 +236,7 @@ export const incidentStore = {
               priorityScore: 78,
               peopleAffected: 30,
               description: bInc.description || 'Emergency incident reported.',
-              imageUrl: 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80',
+              imageUrl: getDisasterImage(bInc.disasterType || 'Flood'),
               status: bInc.status || 'REPORTED',
               verified: false,
               verificationStatus: 'PENDING',
@@ -303,7 +326,7 @@ export const incidentStore = {
       peopleAffected: formData.peopleAffected ? Number(formData.peopleAffected) : 25,
       description: formData.description || '',
       notes: formData.notes || '',
-      imageUrl: formData.imageUrl || 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80',
+      imageUrl: formData.imageUrl || getDisasterImage(formData.aiLabel || 'Flood'),
       status: 'REPORTED',
       verified: false,
       verificationStatus: 'PENDING',

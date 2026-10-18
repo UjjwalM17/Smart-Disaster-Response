@@ -17,6 +17,7 @@ import {
 import { api } from '../../services/api';
 import { incidentStore } from '../../services/incidentStore';
 import { getPriorityColor, getPriorityLabel } from '../Map/IncidentMap';
+import IncidentImage from '../common/IncidentImage';
 
 export default function IncidentDetailDrawer({ incident, isOpen, onClose, onMissionDispatched }) {
   const [teams, setTeams] = useState([]);
@@ -148,9 +149,10 @@ export default function IncidentDetailDrawer({ incident, isOpen, onClose, onMiss
         <div className="p-5 space-y-5 flex-1">
           {/* Full Photo */}
           <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 group">
-            <img
-              src={incident.imageUrl || 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80'}
-              alt="Incident site full"
+            <IncidentImage
+              src={incident.imageUrl}
+              disasterType={incident.aiLabel || incident.disasterType}
+              alt={incident.aiLabel || incident.disasterType || 'Incident site full'}
               className="w-full h-52 object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-3.5">

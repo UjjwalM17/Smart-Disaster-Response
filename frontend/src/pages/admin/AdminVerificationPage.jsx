@@ -12,6 +12,7 @@ import {
 import { incidentStore } from '../../services/incidentStore';
 import { getPriorityColor, getPriorityLabel } from '../../components/Map/IncidentMap';
 import IncidentDetailDrawer from '../../components/AdminDashboard/IncidentDetailDrawer';
+import IncidentImage from '../../components/common/IncidentImage';
 
 export default function AdminVerificationPage() {
   const [incidents, setIncidents] = useState([]);
@@ -147,9 +148,10 @@ export default function AdminVerificationPage() {
                 <div>
                   {/* Photo Preview */}
                   <div className="relative h-44 bg-slate-900 group">
-                    <img
-                      src={inc.imageUrl || 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80'}
-                      alt="Incident proof"
+                    <IncidentImage
+                      src={inc.imageUrl}
+                      disasterType={inc.aiLabel || inc.disasterType}
+                      alt={inc.aiLabel || inc.disasterType || 'Incident proof'}
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute top-3 left-3">
