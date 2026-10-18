@@ -40,6 +40,16 @@ export default function AdminVerificationPage() {
     loadIncidents();
   }, []);
 
+  const handleOpenDrawer = (inc) => {
+    setSelectedIncident(inc);
+    setIsDrawerOpen(true);
+  };
+
+  const handleCloseDrawer = () => {
+    setIsDrawerOpen(false);
+    setSelectedIncident(null);
+  };
+
   const autoVerifiedCount = incidents.filter((i) => i.verified).length;
   const flaggedCount = incidents.filter((i) => !i.verified || (i.aiConfidence && i.aiConfidence < 70)).length;
   const duplicateCount = incidents.filter((i) => i.duplicateGroupId).length;
@@ -220,14 +230,15 @@ export default function AdminVerificationPage() {
             return (
               <div
                 key={inc.incidentId || inc.id}
-                className="bg-[#121b2f] border border-slate-800 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between hover:border-slate-700 transition-all"
+                onClick={() => handleOpenDrawer(inc)}
+                className="bg-[#121b2f] border border-slate-800 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between hover:border-blue-500/50 transition-all cursor-pointer group/card"
               >
                 <div>
                   {/* Photo Preview (Clickable to open drawer) */}
                   <div
-                    onClick={() => {
-                      setSelectedIncident(inc);
-                      setIsDrawerOpen(true);
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenDrawer(inc);
                     }}
                     className="relative h-44 bg-slate-900 group cursor-pointer overflow-hidden"
                   >
@@ -313,9 +324,9 @@ export default function AdminVerificationPage() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedIncident(inc);
-                      setIsDrawerOpen(true);
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenDrawer(inc);
                     }}
                     className="px-3.5 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 hover:text-white text-xs font-bold border border-blue-500/40 transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
                   >
@@ -332,7 +343,7 @@ export default function AdminVerificationPage() {
       <IncidentDetailDrawer
         incident={selectedIncident}
         isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
+        onClose={handleCloseDrawer}
         onMissionDispatched={loadIncidents}
       />
     </div>

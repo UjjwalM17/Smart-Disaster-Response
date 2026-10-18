@@ -18,6 +18,7 @@ import { api } from '../../services/api';
 import { incidentStore } from '../../services/incidentStore';
 import { getPriorityColor, getPriorityLabel } from '../Map/IncidentMap';
 import IncidentImage from '../common/IncidentImage';
+import ErrorBoundary from '../common/ErrorBoundary';
 
 export default function IncidentDetailDrawer({ incident, isOpen, onClose, onMissionDispatched }) {
   const [teams, setTeams] = useState([]);
@@ -68,7 +69,8 @@ export default function IncidentDetailDrawer({ incident, isOpen, onClose, onMiss
 
   if (!isOpen || !incident) return null;
 
-  const score = incident.priorityScore || 80;
+  const rawScore = Number(incident.priorityScore);
+  const score = !isNaN(rawScore) && rawScore > 0 ? Math.min(100, Math.max(1, Math.round(rawScore))) : 75;
   const color = getPriorityColor(score);
   const label = getPriorityLabel(score);
 
@@ -117,10 +119,15 @@ export default function IncidentDetailDrawer({ incident, isOpen, onClose, onMiss
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[9999] flex justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 cursor-pointer"
+    >
       <div
-        className="w-full max-w-lg bg-[#0e172a] border-l border-slate-800 h-full overflow-y-auto shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg bg-[#0e172a] border-l border-slate-800 h-full overflow-y-auto shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300 cursor-default"
       >
+        <ErrorBoundary onClose={onClose}>
         {/* Drawer Header */}
         <div className="p-5 border-b border-slate-800 bg-[#121d36] flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -192,9 +199,9 @@ export default function IncidentDetailDrawer({ incident, isOpen, onClose, onMiss
                 <MapPin className="w-3.5 h-3.5 text-blue-400" /> Incident Location
               </span>
               <p className="text-white font-medium mt-1 truncate">{incident.location || 'New Delhi NCR'}</p>
-              {incident.latitude && (
+              {incident.latitude != null && incident.longitude != null && !isNaN(Number(incident.latitude)) && !isNaN(Number(incident.longitude)) && (
                 <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                  {incident.latitude.toFixed(4)}, {incident.longitude.toFixed(4)}
+                  {Number(incident.latitude).toFixed(4)}, {Number(incident.longitude).toFixed(4)}
                 </p>
               )}
             </div>
@@ -528,6 +535,7 @@ export default function IncidentDetailDrawer({ incident, isOpen, onClose, onMiss
             )}
           </div>
         </div>
+        </ErrorBoundary>
       </div>
     </div>
   );
