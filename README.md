@@ -54,7 +54,7 @@ missions, and automated broadcast alerts using a Spring Boot microservices archi
 - [📸 API Demonstration](#-api-demonstration)
 - [🚀 Getting Started](#-getting-started)
 - [🔮 Future Enhancements](#-future-enhancements)
-- [👨‍💻 About the Developer](#-about-the-developer)
+- [👨‍💻 About the Team](#-about-the-team)
 
 # 📖 Overview
 
@@ -365,9 +365,11 @@ Generates emergency notifications
 | **Database** | MySQL |
 | **ORM** | Spring Data JPA (Hibernate) |
 | **Communication** | REST APIs, RestTemplate |
+| **Frontend** | React 18, Vite, Tailwind CSS, Leaflet Maps |
+| **AI Integration** | Hugging Face Image Classification API |
 | **Validation** | Jakarta Bean Validation |
 | **Logging** | Spring AOP |
-| **Build Tool** | Maven |
+| **Build Tool** | Maven, npm |
 | **Testing** | Postman |
 | **Version Control** | Git & GitHub |
 | **IDE** | IntelliJ IDEA / VS Code |
@@ -538,24 +540,57 @@ To run the complete automated end-to-end integration test:
 - ✅ Prometheus & Grafana Monitoring
 - ✅ CI/CD using GitHub Actions
 
-# 👨‍💻 About the Developer
+# 👨‍💻 About the Team
 
 <div align="center">
 
-## Ujjwal Manocha
+### Built with ❤️ by
 
-Software Developer | Java | Spring Boot | Microservices | React
+<table>
 
-<p>
+<tr>
+
+<td align="center" width="280">
+
+### Ujjwal Manocha
+
+Backend & Architecture Lead
 
 <a href="https://github.com/UjjwalM17">
 <img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github">
 </a>
 
-<a href="mailto:ujjwalmanocha1756@gmail.com">
-  <img src="https://img.shields.io/badge/Email-FFFFFF?style=for-the-badge&logo=gmail&logoColor=EA4335" alt="Email">
+</td>
+
+<td align="center" width="280">
+
+### Krish
+
+Backend & Services Developer
+
+<a href="https://github.com/kr-javas">
+<img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github">
 </a>
-</p>
+
+</td>
+
+<td align="center" width="280">
+
+### Prabhat
+
+Frontend & AI Integration
+
+<a href="https://github.com/shrivarshan-07">
+<img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github">
+</a>
+
+</td>
+
+</tr>
+
+</table>
+
+<br>
 
 ⭐ If you found this project useful, consider giving it a star!
 
@@ -567,7 +602,7 @@ Software Developer | Java | Spring Boot | Microservices | React
 
 ### 🚨 Smart Disaster Response Coordination System
 
-**Microservices Architecture with React Command Dashboard**
+**Microservices Architecture with AI-Powered React Command Dashboard**
 
 </div>
 
